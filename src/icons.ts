@@ -20,6 +20,8 @@ export const icons = {
   camera: svg('<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z"/><circle cx="12" cy="12.5" r="3.5"/>'),
   target: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01" stroke-width="3.5"/>'),
   check: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
+  back: svg('<path d="M15 5 8 12l7 7"/>'),
+  edit: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
   // Hangie, the Digital Closet mascot: a friendly green hanger.
   hangie: `<svg class="hangie" viewBox="0 0 120 120" aria-hidden="true">
     <path d="M60 36V27c0-6 11-6 11-14a11 11 0 0 0-22 0" fill="none" stroke="#4b4b4b" stroke-width="6" stroke-linecap="round"/>

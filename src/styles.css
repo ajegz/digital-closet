@@ -205,6 +205,36 @@ input::placeholder { color: var(--faint); }
 .collection-form { display: grid; gap: 10px; padding: 16px; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* ---------- Item detail ---------- */
+.detail-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detail-top-actions { display: flex; align-items: center; gap: 10px; }
+.detail-top-actions .btn { min-height: 50px; }
+.detail-top-actions .btn svg { width: 20px; height: 20px; }
+#detailFavorite.is-on { color: var(--berry); }
+.detail-layout { display: grid; gap: 16px; }
+.detail-photo { position: relative; aspect-ratio: 4 / 5; display: grid; place-items: center; overflow: hidden; border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); background: var(--surface); }
+.detail-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.detail-photo .sample-garment { width: 60%; height: 70%; }
+.detail-photo .btn { position: absolute; bottom: 16px; }
+.detail-info { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.detail-collection { color: var(--muted); font-size: 15px; font-weight: 800; }
+.detail-name { font-size: 28px; line-height: 1.15; font-weight: 900; letter-spacing: -.01em; overflow-wrap: anywhere; margin-top: -6px; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail-tag { padding: 3px 10px; border-radius: 999px; border: 2px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 800; }
+.detail-progress { display: grid; gap: 8px; padding: 12px 14px; }
+.detail-progress-head { display: flex; justify-content: space-between; font-size: 15px; }
+.detail-progress-head span { color: var(--muted); font-weight: 900; }
+.detail-progress.is-done .detail-progress-head span { color: var(--leaf-text); }
+.detail-list { display: grid; margin: 0; padding: 4px 14px; }
+.detail-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; border-bottom: 2px solid var(--line); }
+.detail-row:last-child { border-bottom: 0; }
+.detail-row dt { color: var(--muted); font-size: 14px; font-weight: 800; }
+.detail-row dd { margin: 0; min-width: 0; text-align: right; font-weight: 800; overflow-wrap: anywhere; }
+.detail-add { min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--sky-text); font-size: 15px; font-weight: 900; }
+.detail-care { display: grid; gap: 4px; padding: 14px; }
+.detail-care h3 { font-size: 15px; font-weight: 900; }
+.detail-care p { color: var(--ink); white-space: pre-line; }
+
 /* ---------- Bottom sheet ---------- */
 .sheet { width: 100%; max-width: 100%; max-height: 92dvh; margin: auto 0 0; padding: 0; border: 0; border-radius: 24px 24px 0 0; background: var(--bg); color: var(--ink); overflow: hidden; }
 .sheet[open] { animation: sheet-up .2s ease-out; }
@@ -224,10 +254,21 @@ input::placeholder { color: var(--faint); }
 .upload-zone.has-photo .upload-icon, .upload-zone.has-photo #uploadHint { display: none; }
 .upload-zone.has-photo strong { position: relative; padding: 6px 12px; border-radius: 12px; background: var(--bg); box-shadow: 0 3px 0 var(--line); }
 .field-grid { display: grid; gap: 12px; }
-.status-toggle { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
-.status-toggle legend { margin-bottom: 6px; padding: 0; }
-.status-toggle .chip { position: relative; cursor: pointer; }
-.status-toggle .chip:focus-within { outline: 3px solid var(--sky-line); outline-offset: 2px; }
+.chip-field { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.chip-field legend { margin-bottom: 6px; padding: 0; }
+.chip-field .chip { position: relative; cursor: pointer; }
+.chip-field .chip:focus-within { outline: 3px solid var(--sky-line); outline-offset: 2px; }
+.field textarea { width: 100%; min-height: 88px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; resize: vertical; }
+.field textarea:focus { outline: none; border-color: var(--sky-line); background: var(--bg); }
+.more-details { border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); }
+.more-details summary { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px; cursor: pointer; list-style: none; font-size: 17px; font-weight: 900; }
+.more-details summary::-webkit-details-marker { display: none; }
+.more-details summary::after { content: ""; width: 10px; height: 10px; margin-left: auto; flex: 0 0 auto; border-right: 3px solid var(--faint); border-bottom: 3px solid var(--faint); transform: rotate(45deg) translateY(-3px); transition: transform .2s ease-out; }
+.more-details[open] summary::after { transform: rotate(-135deg) translateY(-3px); }
+.more-details-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; font-weight: 700; }
+.more-details-body { display: grid; gap: 14px; padding: 4px 14px 16px; }
+.form-error { padding: 12px 14px; border-radius: var(--radius); background: var(--berry-tint); color: var(--berry-text); font-weight: 800; }
+.upload-count { position: absolute; top: 10px; right: 10px; padding: 3px 10px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 900; }
 /* Pinned to the bottom of the sheet so Save is always reachable on short screens. */
 .sheet-actions { position: sticky; bottom: 0; z-index: 1; display: flex; gap: 10px; margin: 0 calc(var(--gutter) * -1); padding: 12px var(--gutter) calc(16px + var(--safe-bottom)); background: var(--bg); border-top: 2px solid var(--line); }
 .sheet-actions .btn-primary { flex: 1; }
@@ -285,6 +326,8 @@ input::placeholder { color: var(--faint); }
   .topbar { padding: 0 32px; min-height: 72px; }
   .content { padding: 24px 32px 0; }
   .dashboard { grid-template-columns: 1.4fr 1fr; }
+  .detail-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
+  .detail-photo { position: sticky; top: 96px; }
   .stats-grid { grid-column: 1 / -1; }
   .quest-card { align-self: stretch; }
   .toast { bottom: 24px; left: 248px; }

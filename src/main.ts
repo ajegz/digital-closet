@@ -1,13 +1,15 @@
 import "./styles.css";
 import { icons, type IconName } from "./icons";
+import { processPhoto } from "./photos";
 import { loadItems, loadMeta, removeItem, saveItem, saveMeta } from "./storage";
-import type { ClosetItem, Garment, Status } from "./types";
+import { OCCASIONS, WEATHER, type ClosetItem, type Garment, type Occasion, type Status, type Weather } from "./types";
 
 type Tab = "closet" | "favorites" | "recent" | "collections";
 type EmptyAction = "add" | "reset" | "closet";
 
 const DEFAULT_CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Dresses", "Accessories"];
 const UNKNOWN = "To identify";
+const UNTITLED = "Untitled piece";
 const RECENT_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const XP_PER_LEVEL = 100;
@@ -15,6 +17,23 @@ const QUEST_TARGET = 3;
 const TOAST_MS = 5000;
 const COLLECTION_COLORS = ["var(--leaf)", "var(--sky)", "var(--grape)", "var(--flame)", "var(--berry)", "var(--sun-ledge)"];
 const TAB_TITLES: Record<Tab, string> = { closet: "Closet", favorites: "Favorites", recent: "Recent", collections: "Collections" };
+// Fields that live inside the sheet's collapsed "More details" section.
+const MORE_FIELDS = ["material", "price", "purchasedOn", "store", "weather", "occasions", "care"];
+
+// What "fully described" means on the detail screen's progress bar.
+const DETAIL_FIELDS: ((item: ClosetItem) => boolean)[] = [
+  (item) => Boolean(item.image || item.thumb),
+  (item) => known(item.brand),
+  (item) => known(item.color),
+  (item) => Boolean(item.size),
+  (item) => Boolean(item.material),
+  (item) => Boolean(item.weather?.length),
+  (item) => Boolean(item.occasions?.length),
+  (item) => item.price !== undefined,
+  (item) => Boolean(item.purchasedOn),
+  (item) => Boolean(item.store),
+  (item) => Boolean(item.care)
+];
 
 // Shown only while the closet is empty so the first screen isn't blank. Never saved.
 const sampleItems: ClosetItem[] = [
@@ -31,6 +50,9 @@ let tab: Tab = "closet";
 let activeCategory = "all";
 let activeStatus = "all";
 let layout: "grid" | "list" = "grid";
+let viewingItemId: string | null = null;
+// Set when a card opens the detail screen, so Back returns to the same list and scroll position.
+let detailReturn: { hash: string; scroll: number } | null = null;
 let editingId: string | null = null;
 let previewUrl: string | null = null;
 let toastTimer: number | undefined;
@@ -47,6 +69,9 @@ const itemDialog = $<HTMLDialogElement>("#itemDialog");
 const itemForm = $<HTMLFormElement>("#itemForm");
 const photoInput = $<HTMLInputElement>("#photoInput");
 const categorySelect = $<HTMLSelectElement>("#categorySelect");
+const moreDetails = $<HTMLDetailsElement>("#moreDetails");
+const saveButton = $<HTMLButtonElement>("#saveItemButton");
+const formError = $<HTMLParagraphElement>("#formError");
 const collectionForm = $<HTMLFormElement>("#collectionForm");
 const collectionInput = $<HTMLInputElement>("#collectionInput");
 const toast = $<HTMLDivElement>("#toast");
@@ -64,6 +89,7 @@ const pad = (value: number) => String(value).padStart(2, "0");
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 const collectionHash = (name: string) => `#collection-${encodeURIComponent(name)}`;
 const collectionColor = (name: string) => COLLECTION_COLORS[Math.max(categories.indexOf(name), 0) % COLLECTION_COLORS.length];
+const statusPill = (item: ClosetItem) => item.status === "Confirmed" ? `<span class="status-pill is-ok">Confirmed</span>` : `<span class="status-pill">Needs review</span>`;
 
 function newId() {
   return crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -82,19 +108,15 @@ function relativeDay(time: number) {
   return new Date(time).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatPurchaseDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 function garmentFor(category: string): Garment {
   if (category === "Bottoms") return "pants";
   if (category === "Outerwear") return "coat";
   return "tee";
-}
-
-function readAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 async function persist(task: Promise<unknown>) {
@@ -146,6 +168,23 @@ function recordActivity() {
 function applyHash(hash: string) {
   // Back/forward while the sheet is open should leave the sheet, like a native app.
   if (itemDialog.open) itemDialog.close();
+
+  if (hash.startsWith("#item-")) {
+    const id = decodeURIComponent(hash.slice("#item-".length));
+    if (items.some((item) => item.id === id)) {
+      viewingItemId = id;
+      render();
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    history.replaceState(null, "", "#closet");
+    hash = "#closet";
+  }
+
+  const returning = viewingItemId !== null && detailReturn?.hash === hash ? detailReturn : null;
+  viewingItemId = null;
+  detailReturn = null;
+
   if (hash.startsWith("#collection-")) {
     const name = decodeURIComponent(hash.slice("#collection-".length));
     tab = "closet";
@@ -156,6 +195,17 @@ function applyHash(hash: string) {
     activeCategory = "all";
   }
   render();
+  if (returning) window.scrollTo({ top: returning.scroll });
+}
+
+function openDetail(id: string) {
+  detailReturn = { hash: location.hash, scroll: window.scrollY };
+  location.hash = `#item-${encodeURIComponent(id)}`;
+}
+
+function closeDetail() {
+  if (detailReturn) history.back();
+  else location.hash = "#closet";
 }
 
 /* ---------- Rendering ---------- */
@@ -167,7 +217,7 @@ function visibleItems() {
     .filter((item) => {
       if (tab === "favorites" && !item.favorite) return false;
       if (tab === "recent" && item.createdAt < recentCutoff) return false;
-      const matchesText = [item.name, item.category, item.brand, item.color].join(" ").toLowerCase().includes(query);
+      const matchesText = [item.name, item.category, item.brand, item.color, item.material, item.store].join(" ").toLowerCase().includes(query);
       const matchesCategory = activeCategory === "all" || item.category === activeCategory;
       const matchesStatus = activeStatus === "all" || item.status === activeStatus;
       return matchesText && matchesCategory && matchesStatus;
@@ -176,20 +226,20 @@ function visibleItems() {
 }
 
 function cardHtml(item: ClosetItem) {
-  const visual = item.image
-    ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy">`
+  const photo = item.thumb ?? item.image;
+  const visual = photo
+    ? `<img src="${escapeHtml(photo)}" alt="" loading="lazy">`
     : `<div class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></div>`;
   const heart = item.sample
     ? `<span class="tag">Sample</span>`
     : `<button class="heart-button${item.favorite ? " is-on" : ""}" data-favorite type="button" aria-pressed="${item.favorite}" aria-label="Favorite ${escapeHtml(item.name)}">${item.favorite ? icons.heartFilled : icons.heart}</button>`;
   const meta = [item.brand, item.color].filter(known).join(" · ") || item.category;
-  const status = item.status === "Confirmed" ? `<span class="status-pill is-ok">Confirmed</span>` : `<span class="status-pill">Needs review</span>`;
-  const label = item.sample ? "Sample piece. Add your own" : `Edit ${item.name}`;
+  const label = item.sample ? "Sample piece. Add your own" : `Open ${item.name}`;
   return `
     <article class="item-card${item.sample ? " is-sample" : ""}" data-id="${escapeHtml(item.id)}">
       <div class="item-visual">${visual}</div>
       ${heart}
-      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p>${status}</div>
+      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p>${statusPill(item)}</div>
     </article>`;
 }
 
@@ -204,18 +254,21 @@ function emptyState(): { title: string; text: string; action: EmptyAction } {
 const EMPTY_ACTION_LABELS: Record<EmptyAction, string> = { add: "Add a piece", reset: "Clear filters", closet: "Browse closet" };
 
 function render() {
+  const viewing = viewingItemId ? items.find((item) => item.id === viewingItemId) : undefined;
   const onCollections = tab === "collections";
-  $("#closetScreen").hidden = onCollections;
-  $("#collectionsScreen").hidden = !onCollections;
+  $("#itemScreen").hidden = !viewing;
+  $("#closetScreen").hidden = Boolean(viewing) || onCollections;
+  $("#collectionsScreen").hidden = Boolean(viewing) || !onCollections;
   $("#dashboard").hidden = tab !== "closet" || activeCategory !== "all";
-  $("#screenTitle").textContent = TAB_TITLES[tab];
+  $("#screenTitle").textContent = viewing ? "Piece" : TAB_TITLES[tab];
   document.querySelectorAll<HTMLAnchorElement>(".tab").forEach((link) => {
     if (link.dataset.tab === tab) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
 
   renderStats();
-  if (onCollections) renderCollections();
+  if (viewing) renderDetail(viewing);
+  else if (onCollections) renderCollections();
   else renderCatalog();
 }
 
@@ -242,6 +295,49 @@ function renderCatalog() {
     action.textContent = EMPTY_ACTION_LABELS[state.action];
     action.dataset.action = state.action;
   }
+}
+
+function renderDetail(item: ClosetItem) {
+  $("#detailCollection").textContent = item.category;
+  $("#detailName").textContent = item.name;
+  $("#detailTags").innerHTML = statusPill(item);
+
+  const favorite = $("#detailFavorite");
+  favorite.innerHTML = item.favorite ? icons.heartFilled : icons.heart;
+  favorite.classList.toggle("is-on", item.favorite);
+  favorite.setAttribute("aria-pressed", String(item.favorite));
+  favorite.setAttribute("aria-label", `Favorite ${item.name}`);
+
+  const photo = item.image ?? item.thumb;
+  $("#detailPhoto").innerHTML = photo
+    ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(item.name)}">`
+    : `<div class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></div><button class="btn btn-secondary" type="button" data-edit-field="photo">${icons.camera}Add photo</button>`;
+
+  const filled = DETAIL_FIELDS.filter((isFilled) => isFilled(item)).length;
+  const complete = filled === DETAIL_FIELDS.length;
+  $("#detailProgressTitle").textContent = complete ? "Fully described" : "Details";
+  $("#detailProgressCount").textContent = `${filled}/${DETAIL_FIELDS.length}`;
+  $("#detailProgressBar").style.width = `${(filled / DETAIL_FIELDS.length) * 100}%`;
+  document.querySelector(".detail-progress")?.classList.toggle("is-done", complete);
+
+  const rows: [label: string, field: string, value: string | undefined][] = [
+    ["Brand", "brand", known(item.brand) ? item.brand : undefined],
+    ["Color", "color", known(item.color) ? item.color : undefined],
+    ["Size", "size", item.size],
+    ["Material", "material", item.material],
+    ["Weather", "weather", item.weather?.join(", ") || undefined],
+    ["Occasion", "occasions", item.occasions?.join(", ") || undefined],
+    ["Price", "price", item.price !== undefined ? item.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : undefined],
+    ["Purchased", "purchasedOn", item.purchasedOn ? formatPurchaseDate(item.purchasedOn) : undefined],
+    ["Where from", "store", item.store]
+  ];
+  $("#detailList").innerHTML = rows
+    .map(([label, field, value]) => `<div class="detail-row"><dt>${label}</dt><dd>${value ? escapeHtml(value) : `<button class="detail-add" type="button" data-edit-field="${field}" aria-label="Add ${label.toLowerCase()}">Add</button>`}</dd></div>`)
+    .join("") + `<div class="detail-row"><dt>Added</dt><dd>${relativeDay(item.createdAt)}</dd></div>`;
+
+  $("#detailCareText").innerHTML = item.care
+    ? escapeHtml(item.care)
+    : `<button class="detail-add" type="button" data-edit-field="care">Add care notes</button>`;
 }
 
 function renderStats() {
@@ -291,6 +387,10 @@ function renderCategoryOptions(selected: string) {
   categorySelect.innerHTML = categories.map((name) => `<option${name === selected ? " selected" : ""}>${escapeHtml(name)}</option>`).join("");
 }
 
+function renderChipOptions(container: HTMLElement, name: string, options: readonly string[]) {
+  container.insertAdjacentHTML("beforeend", options.map((option) => `<label class="chip"><input type="checkbox" name="${name}" value="${option}" /> ${option}</label>`).join(""));
+}
+
 /* ---------- Feedback banner ---------- */
 
 interface ToastOptions {
@@ -332,17 +432,24 @@ function bumpStats() {
 
 /* ---------- Add / edit sheet ---------- */
 
-function formField<T extends HTMLInputElement | HTMLSelectElement = HTMLInputElement>(name: string) {
+function formField<T extends HTMLInputElement | HTMLTextAreaElement = HTMLInputElement>(name: string) {
   return itemForm.elements.namedItem(name) as T;
 }
 
-function setPhotoPreview(src?: string) {
+function setChecked(name: string, values: readonly string[] = []) {
+  itemForm.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((input) => { input.checked = values.includes(input.value); });
+}
+
+function setPhotoPreview(src?: string, count = 1) {
   const preview = $<HTMLImageElement>("#photoPreview");
   preview.hidden = !src;
   if (src) preview.src = src;
   else preview.removeAttribute("src");
   $("#uploadZone").classList.toggle("has-photo", Boolean(src));
-  $("#uploadTitle").textContent = src ? "Change photo" : "Add a photo";
+  $("#uploadTitle").textContent = count > 1 ? `${count} photos · one piece each` : src ? "Change photo" : "Add a photo";
+  const badge = $("#uploadCount");
+  badge.hidden = count < 2;
+  badge.textContent = `+${count - 1}`;
 }
 
 function clearPreviewUrl() {
@@ -350,59 +457,129 @@ function clearPreviewUrl() {
   previewUrl = null;
 }
 
-function openItemDialog(item?: ClosetItem) {
+function moreDetailsFilled(item?: ClosetItem) {
+  if (!item) return 0;
+  return [item.material, item.price, item.purchasedOn, item.store, item.weather?.length, item.occasions?.length, item.care].filter((value) => value !== undefined && value !== "" && value !== 0).length;
+}
+
+function openItemDialog(item?: ClosetItem, focusField?: string) {
   editingId = item?.id ?? null;
   itemForm.reset();
   clearPreviewUrl();
+  formError.hidden = true;
   renderCategoryOptions(item?.category ?? (activeCategory !== "all" ? activeCategory : categories[0]));
   formField("name").value = item?.name ?? "";
   formField("brand").value = item && known(item.brand) ? item.brand : "";
   formField("color").value = item && known(item.color) ? item.color : "";
+  formField("size").value = item?.size ?? "";
+  formField("material").value = item?.material ?? "";
+  formField("price").value = item?.price !== undefined ? String(item.price) : "";
+  formField("purchasedOn").value = item?.purchasedOn ?? "";
+  formField("store").value = item?.store ?? "";
+  formField<HTMLTextAreaElement>("care").value = item?.care ?? "";
+  setChecked("weather", item?.weather);
+  setChecked("occasions", item?.occasions);
   (itemForm.elements.namedItem("status") as RadioNodeList).value = item?.status ?? "Needs review";
-  setPhotoPreview(item?.image);
+
+  // Several photos at once only make sense when adding: each one becomes its own piece.
+  photoInput.multiple = !item;
+  setPhotoPreview(item?.image ?? item?.thumb);
+  const filledMore = moreDetailsFilled(item);
+  $("#moreDetailsHint").textContent = filledMore ? `${filledMore} filled` : "Material, price, care…";
+  moreDetails.open = Boolean(focusField && MORE_FIELDS.includes(focusField));
+
   $("#dialogEyebrow").textContent = item ? "Edit piece" : "New piece";
   $("#dialogTitle").textContent = item ? "Refine the details" : "Bring in a piece";
-  $("#saveItemButton").textContent = item ? "Save changes" : "Add to closet";
+  saveButton.textContent = item ? "Save changes" : "Add to closet";
   $("#deleteItemButton").hidden = !item;
   itemDialog.showModal();
+
+  if (focusField === "photo") photoInput.focus();
+  else if (focusField) itemForm.querySelector<HTMLElement>(`[name="${focusField}"]`)?.focus();
 }
 
-async function saveFromForm() {
-  const formData = new FormData(itemForm);
+function readDetails(formData: FormData) {
   const field = (name: string) => String(formData.get(name) ?? "").trim();
-  const file = photoInput.files?.[0];
-  const existing = items.find((entry) => entry.id === editingId);
-  const xpBefore = totalXp();
-  const questBefore = questProgress();
-  const now = Date.now();
-
-  const details = {
-    name: field("name") || "Untitled piece",
+  const price = field("price") === "" ? undefined : Number(field("price"));
+  const weather = formData.getAll("weather").filter((value): value is Weather => WEATHER.includes(value as Weather));
+  const occasions = formData.getAll("occasions").filter((value): value is Occasion => OCCASIONS.includes(value as Occasion));
+  // Empty optional fields become undefined so clearing a field in the editor really clears it.
+  return {
+    name: field("name") || UNTITLED,
     category: field("category") || categories[0],
     brand: field("brand") || UNKNOWN,
     color: field("color") || UNKNOWN,
-    status: (field("status") || "Needs review") as Status
+    status: (field("status") || "Needs review") as Status,
+    size: field("size") || undefined,
+    material: field("material") || undefined,
+    price: price !== undefined && Number.isFinite(price) && price >= 0 ? price : undefined,
+    purchasedOn: field("purchasedOn") || undefined,
+    store: field("store") || undefined,
+    care: field("care") || undefined,
+    weather: weather.length ? weather : undefined,
+    occasions: occasions.length ? occasions : undefined
   };
-  const image = file ? await readAsDataUrl(file) : existing?.image;
+}
+
+function celebrate(xpBefore: number, questBefore: number, fallback: { title: string; message: string }) {
+  const xpAfter = totalXp();
+  const xpGained = xpAfter - xpBefore;
+  if (levelFor(xpAfter) > levelFor(xpBefore)) {
+    showToast({ title: `Level ${levelFor(xpAfter)}!`, message: "Your closet is leveling up.", xp: xpGained });
+  } else if (questBefore < QUEST_TARGET && questProgress() >= QUEST_TARGET) {
+    showToast({ title: "Daily quest complete!", message: `${QUEST_TARGET} pieces with photos today. Nice work.`, xp: xpGained });
+  } else {
+    showToast({ ...fallback, xp: xpGained > 0 ? xpGained : undefined });
+  }
+}
+
+async function saveFromForm() {
+  const details = readDetails(new FormData(itemForm));
+  const files = Array.from(photoInput.files ?? []);
+  const existing = items.find((entry) => entry.id === editingId);
+  const xpBefore = totalXp();
+  const questBefore = questProgress();
+
+  if (!existing && files.length > 1) {
+    await saveMany(files, details, xpBefore, questBefore);
+    return;
+  }
+
+  if (files[0]) saveButton.textContent = "Preparing photo…";
+  const photo = files[0] ? await processPhoto(files[0]) : { image: existing?.image, thumb: existing?.thumb };
+  const now = Date.now();
   const item: ClosetItem = existing
-    ? { ...existing, ...details, image, updatedAt: now }
-    : { id: newId(), ...details, image, favorite: false, createdAt: now, updatedAt: now };
+    ? { ...existing, ...details, ...photo, updatedAt: now }
+    : { id: newId(), ...details, ...photo, favorite: false, createdAt: now, updatedAt: now };
 
   items = [item, ...items.filter((entry) => entry.id !== item.id)];
   recordActivity();
   itemDialog.close();
   render();
   bumpStats();
-
-  const xpGained = totalXp() - xpBefore;
-  if (levelFor(totalXp()) > levelFor(xpBefore)) {
-    showToast({ title: `Level ${levelFor(totalXp())}!`, message: "Your closet is leveling up.", xp: xpGained });
-  } else if (questBefore < QUEST_TARGET && questProgress() >= QUEST_TARGET) {
-    showToast({ title: "Daily quest complete!", message: `${QUEST_TARGET} pieces with photos today. Nice work.`, xp: xpGained });
-  } else {
-    showToast({ title: existing ? "Saved" : "Nice!", message: existing ? `${item.name} is up to date.` : `${item.name} is in your closet.`, xp: xpGained > 0 ? xpGained : undefined });
-  }
+  celebrate(xpBefore, questBefore, existing
+    ? { title: "Saved", message: `${item.name} is up to date.` }
+    : { title: "Nice!", message: `${item.name} is in your closet.` });
   await persist(saveItem(item));
+}
+
+async function saveMany(files: File[], details: ReturnType<typeof readDetails>, xpBefore: number, questBefore: number) {
+  const created: ClosetItem[] = [];
+  for (const [index, file] of files.entries()) {
+    saveButton.textContent = `Adding ${index + 1} of ${files.length}…`;
+    const photo = await processPhoto(file);
+    // The list is newest-first, so earlier picks get later timestamps to show in the order they were picked.
+    const now = Date.now() - index;
+    const name = details.name === UNTITLED ? UNTITLED : `${details.name} ${index + 1}`;
+    created.push({ id: newId(), ...details, name, ...photo, favorite: false, createdAt: now, updatedAt: now });
+  }
+  items = [...created, ...items];
+  recordActivity();
+  itemDialog.close();
+  render();
+  bumpStats();
+  celebrate(xpBefore, questBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
+  await persist(Promise.all(created.map(saveItem)));
 }
 
 function deleteEditingItem() {
@@ -410,7 +587,8 @@ function deleteEditingItem() {
   if (!item) return;
   items = items.filter((entry) => entry.id !== item.id);
   itemDialog.close();
-  render();
+  if (viewingItemId === item.id) closeDetail();
+  else render();
   void persist(removeItem(item.id));
   showToast({
     kind: "info",
@@ -482,7 +660,23 @@ grid.addEventListener("click", (event) => {
     void persist(saveItem(item));
     return;
   }
-  openItemDialog(item);
+  openDetail(item.id);
+});
+
+$("#itemScreen").addEventListener("click", (event) => {
+  const item = items.find((entry) => entry.id === viewingItemId);
+  if (!item) return;
+  const target = event.target as Element;
+  if (target.closest("#detailBack")) closeDetail();
+  else if (target.closest("#detailEdit")) openItemDialog(item);
+  else if (target.closest("#detailFavorite")) {
+    item.favorite = !item.favorite;
+    render();
+    void persist(saveItem(item));
+  } else {
+    const add = target.closest<HTMLElement>("[data-edit-field]");
+    if (add) openItemDialog(item, add.dataset.editField);
+  }
 });
 
 $("#categoryFilters").addEventListener("click", (event) => {
@@ -537,20 +731,27 @@ itemDialog.addEventListener("close", () => {
   itemForm.reset();
 });
 photoInput.addEventListener("change", () => {
-  const file = photoInput.files?.[0];
-  if (!file) return;
+  const files = photoInput.files;
+  if (!files?.length) return;
   clearPreviewUrl();
-  previewUrl = URL.createObjectURL(file);
-  setPhotoPreview(previewUrl);
+  previewUrl = URL.createObjectURL(files[0]);
+  setPhotoPreview(previewUrl, files.length);
 });
 itemForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const saveButton = $<HTMLButtonElement>("#saveItemButton");
+  const label = saveButton.textContent;
   saveButton.disabled = true;
+  formError.hidden = true;
   try {
     await saveFromForm();
+  } catch (error) {
+    console.error(error);
+    // The banner sits under the open sheet, so photo errors are shown inside it.
+    formError.textContent = "Couldn’t read that photo. Try a JPG, PNG or WebP image.";
+    formError.hidden = false;
   } finally {
     saveButton.disabled = false;
+    if (itemDialog.open) saveButton.textContent = label;
   }
 });
 $("#deleteItemButton").addEventListener("click", deleteEditingItem);
@@ -573,6 +774,8 @@ async function init() {
   document.querySelectorAll<HTMLElement>("[data-icon]").forEach((element) => {
     element.innerHTML = icons[element.dataset.icon as IconName] ?? "";
   });
+  renderChipOptions($("#weatherField"), "weather", WEATHER);
+  renderChipOptions($("#occasionField"), "occasions", OCCASIONS);
   try {
     const [storedItems, storedCategories, storedDays] = await Promise.all([loadItems(), loadMeta<string[]>("categories"), loadMeta<string[]>("activityDays")]);
     items = storedItems;
