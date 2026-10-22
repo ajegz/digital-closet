@@ -26,6 +26,7 @@
           <h1 class="topbar-title" id="screenTitle">Closet</h1>
           <div class="topbar-stats">
             <span class="stat-pill is-xp" id="xpPill"><span class="stat-pill-icon" data-icon="bolt"></span><b id="xpCount">0</b></span>
+            <button class="account-button" id="accountButton" type="button" aria-label="Account and backup"><span data-icon="user"></span><span class="sync-dot" id="accountDot" hidden></span></button>
           </div>
         </header>
 
@@ -184,6 +185,54 @@
           <button class="btn btn-primary" id="saveItemButton" type="submit">Add to closet</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="sheet" id="accountDialog" aria-labelledby="accountTitle">
+      <div class="sheet-card account-card">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <button class="sheet-close" type="button" data-close-account aria-label="Close"><span data-icon="close"></span></button>
+
+        <form class="account-step" id="emailStep" novalidate>
+          <div class="account-mascot" data-icon="hangie"></div>
+          <h2 class="sheet-title" id="accountTitle">Back up your closet</h2>
+          <p class="account-text">Sign in to keep your pieces safe and see them on your phone and laptop. We’ll email you a 6-digit code. No password needed.</p>
+          <label class="field">Email<input id="emailInput" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required /></label>
+          <p class="form-error" id="emailError" role="alert" hidden></p>
+          <button class="btn btn-primary" id="sendCodeButton" type="submit">Send code</button>
+        </form>
+
+        <form class="account-step" id="codeStep" novalidate hidden>
+          <div class="account-mascot" data-icon="hangie"></div>
+          <h2 class="sheet-title">Check your email</h2>
+          <p class="account-text">Enter the code we sent to <strong id="codeEmail"></strong>.</p>
+          <label class="field">Code<input id="codeInput" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="123456" required /></label>
+          <p class="form-error" id="codeError" role="alert" hidden></p>
+          <button class="btn btn-primary" id="verifyButton" type="submit">Sign in</button>
+          <div class="account-links">
+            <button class="text-button" id="resendButton" type="button">Send a new code</button>
+            <button class="text-button" id="changeEmailButton" type="button">Use a different email</button>
+          </div>
+        </form>
+
+        <section class="account-step" id="signedInStep" hidden>
+          <h2 class="sheet-title">Your account</h2>
+          <p class="account-email" id="accountEmail"></p>
+          <div class="sync-card card">
+            <span class="sync-dot is-large" id="syncDot"></span>
+            <div class="sync-text"><strong id="syncTitle">Synced</strong><span id="syncDetail"></span></div>
+            <button class="btn btn-secondary" id="syncNowButton" type="button">Sync now</button>
+          </div>
+          <p class="form-error" id="signOutWarning" role="alert" hidden></p>
+          <button class="btn btn-danger" id="signOutButton" type="button">Sign out</button>
+          <p class="account-note">Signing out removes this device’s copy. Your closet stays safe in your account.</p>
+        </section>
+
+        <section class="account-step" id="offStep" hidden>
+          <div class="account-mascot" data-icon="hangie"></div>
+          <h2 class="sheet-title">Saved on this device</h2>
+          <p class="account-text">Cloud backup isn’t set up in this version of the app, so your closet is saved in this browser only.</p>
+        </section>
+      </div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden>

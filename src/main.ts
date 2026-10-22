@@ -1,14 +1,15 @@
 import "./styles.css";
 import { icons, type IconName } from "./icons";
 import { processPhoto } from "./photos";
+import { initAccount } from "./account";
 import { loadItems, loadMeta, removeItem, saveItem, saveMeta } from "./storage";
-import { OCCASIONS, WEATHER, type ClosetItem, type Garment, type Occasion, type Status, type Weather } from "./types";
+import { isSignedIn, requestSync, startSync } from "./sync";
+import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Status, type Weather } from "./types";
 
 type Tab = "closet" | "favorites" | "recent" | "collections";
 type EmptyAction = "add" | "reset" | "closet";
 
 const DEFAULT_CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Dresses", "Accessories"];
-const UNKNOWN = "To identify";
 const UNTITLED = "Untitled piece";
 const RECENT_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -48,6 +49,8 @@ const sampleItems: ClosetItem[] = [
 ];
 
 let items: ClosetItem[] = [];
+let collections: Collection[] = [];
+// Collection names in display order, plus any category a piece uses that has no collection record.
 let categories = [...DEFAULT_CATEGORIES];
 // Dated "" so todayLog() replaces it on first use; calling dayKey() here would run before its helpers exist.
 let taskLog: TaskLog = emptyTaskLog("");
@@ -97,7 +100,13 @@ const collectionColor = (name: string) => COLLECTION_COLORS[Math.max(categories.
 const statusPill = (item: ClosetItem) => item.status === "Confirmed" ? `<span class="status-pill is-ok">Confirmed</span>` : `<span class="status-pill">Needs review</span>`;
 
 function newId() {
-  return crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  if (crypto.randomUUID) return crypto.randomUUID();
+  // randomUUID only exists on secure origins (e.g. not a phone on http://192.168…); the cloud needs a real v4 UUID.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function dayKey(time = Date.now()) {
@@ -131,6 +140,12 @@ async function persist(task: Promise<unknown>) {
     console.error(error);
     showToast({ kind: "error", title: "Couldn’t save", message: "This browser blocked storage. Recent changes may be lost on refresh." });
   }
+}
+
+// For changes to pieces and collections: save locally, then let the cloud catch up.
+async function persistAndSync(task: Promise<unknown>) {
+  await persist(task);
+  requestSync();
 }
 
 /* ---------- Game loop (see duolingo-style skill §5) ---------- */
@@ -642,9 +657,10 @@ async function saveFromForm() {
   if (files[0]) saveButton.textContent = "Preparing photo…";
   const photo = files[0] ? await processPhoto(files[0]) : { image: existing?.image, thumb: existing?.thumb };
   const now = Date.now();
+  const sync = { dirty: true, photoDirty: files[0] ? true : existing?.photoDirty ?? Boolean(photo.image) };
   const item: ClosetItem = existing
-    ? { ...existing, ...details, ...photo, updatedAt: now }
-    : { id: newId(), ...details, ...photo, favorite: false, createdAt: now, updatedAt: now };
+    ? { ...existing, ...details, ...photo, ...sync, updatedAt: now }
+    : { id: newId(), ...details, ...photo, ...sync, favorite: false, createdAt: now, updatedAt: now };
 
   items = [item, ...items.filter((entry) => entry.id !== item.id)];
   logProgress(existing, item);
@@ -654,7 +670,7 @@ async function saveFromForm() {
   celebrate(xpBefore, tasksDoneBefore, existing
     ? { title: "Saved", message: `${item.name} is up to date.` }
     : { title: "Nice!", message: `${item.name} is in your closet.` });
-  await persist(saveItem(item));
+  await persistAndSync(saveItem(item));
 }
 
 async function saveMany(files: File[], details: ReturnType<typeof readDetails>, xpBefore: number, tasksDoneBefore: boolean) {
@@ -665,7 +681,7 @@ async function saveMany(files: File[], details: ReturnType<typeof readDetails>, 
     // The list is newest-first, so earlier picks get later timestamps to show in the order they were picked.
     const now = Date.now() - index;
     const name = details.name === UNTITLED ? UNTITLED : `${details.name} ${index + 1}`;
-    created.push({ id: newId(), ...details, name, ...photo, favorite: false, createdAt: now, updatedAt: now });
+    created.push({ id: newId(), ...details, name, ...photo, dirty: true, photoDirty: true, favorite: false, createdAt: now, updatedAt: now });
   }
   items = [...created, ...items];
   logProgress(undefined, created[0], created.length);
@@ -673,7 +689,7 @@ async function saveMany(files: File[], details: ReturnType<typeof readDetails>, 
   render();
   bumpXp();
   celebrate(xpBefore, tasksDoneBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
-  await persist(Promise.all(created.map(saveItem)));
+  await persistAndSync(Promise.all(created.map(saveItem)));
 }
 
 function deleteEditingItem() {
@@ -683,7 +699,9 @@ function deleteEditingItem() {
   itemDialog.close();
   if (viewingItemId === item.id) closeDetail();
   else render();
-  void persist(removeItem(item.id));
+  // Signed in, the deletion has to reach other devices, so keep a marker until it's synced.
+  const now = Date.now();
+  void persistAndSync(isSignedIn() ? saveItem({ ...item, deletedAt: now, updatedAt: now, dirty: true }) : removeItem(item.id));
   showToast({
     kind: "info",
     title: "Deleted",
@@ -691,9 +709,11 @@ function deleteEditingItem() {
     action: {
       label: "Undo",
       run: () => {
-        items = [item, ...items];
+        // The cloud may already have dropped the photo with the deletion, so send it again.
+        const restored = { ...item, updatedAt: Date.now(), dirty: true, photoDirty: Boolean(item.image) };
+        items = [restored, ...items];
         render();
-        void persist(saveItem(item));
+        void persistAndSync(saveItem(restored));
       }
     }
   });
@@ -720,9 +740,11 @@ function createCollection(rawName: string) {
     showToast({ kind: "info", title: "Already there", message: `You have a ${existing} collection.` });
     return;
   }
-  categories = [...categories, name];
+  const position = Math.max(-1, ...collections.map((collection) => collection.position)) + 1;
+  collections = [...collections, { id: newId(), name, position, updatedAt: Date.now(), dirty: true }];
+  refreshCategories();
   render();
-  void persist(saveMeta("categories", categories));
+  void persistAndSync(saveMeta("collections", collections));
   showToast({ title: "Collection created", message: `${name} is ready for pieces.` });
 }
 
@@ -754,8 +776,9 @@ grid.addEventListener("click", (event) => {
   }
   if (target.closest("[data-favorite]")) {
     item.favorite = !item.favorite;
+    Object.assign(item, { updatedAt: Date.now(), dirty: true });
     render();
-    void persist(saveItem(item));
+    void persistAndSync(saveItem(item));
     return;
   }
   openDetail(item.id);
@@ -769,8 +792,9 @@ $("#itemScreen").addEventListener("click", (event) => {
   else if (target.closest("#detailEdit")) openItemDialog(item);
   else if (target.closest("#detailFavorite")) {
     item.favorite = !item.favorite;
+    Object.assign(item, { updatedAt: Date.now(), dirty: true });
     render();
-    void persist(saveItem(item));
+    void persistAndSync(saveItem(item));
   } else {
     const add = target.closest<HTMLElement>("[data-edit-field]");
     if (add) openItemDialog(item, add.dataset.editField);
@@ -875,17 +899,49 @@ async function init() {
   renderChipOptions($("#weatherField"), "weather", WEATHER);
   renderChipOptions($("#occasionField"), "occasions", OCCASIONS);
   try {
-    const [storedItems, storedCategories, storedLog] = await Promise.all([loadItems(), loadMeta<string[]>("categories"), loadMeta<TaskLog>("taskLog")]);
-    items = storedItems;
-    categories = storedCategories ?? categories;
-    taskLog = storedLog ?? taskLog;
+    await loadState();
   } catch (error) {
     console.error(error);
     showToast({ kind: "error", title: "Storage is off", message: "This browser can’t save your closet, so changes will be lost on refresh." });
   }
-  // Keep every item's collection listed, even if it was added before the collection list was saved.
-  categories = [...categories, ...new Set(items.map((item) => item.category).filter((name) => !categories.includes(name)))];
   applyHash(location.hash);
+  initAccount(showToast);
+  // Changes pulled from the cloud (or a sign-out clearing this device) reload everything from IndexedDB.
+  void startSync({
+    onDataChanged: async () => {
+      await loadState();
+      render();
+    }
+  });
+}
+
+async function loadState() {
+  const [storedItems, storedCollections, legacyNames, storedLog] = await Promise.all([
+    loadItems(),
+    loadMeta<Collection[]>("collections"),
+    loadMeta<string[]>("categories"),
+    loadMeta<TaskLog>("taskLog")
+  ]);
+  items = storedItems.filter((item) => !item.deletedAt);
+  if (storedCollections) {
+    collections = storedCollections;
+  } else {
+    // First run, or the pre-sync list of names: turn it into records that can sync.
+    const now = Date.now();
+    collections = (legacyNames ?? DEFAULT_CATEGORIES).map((name, position) => ({ id: newId(), name, position, updatedAt: now, dirty: true }));
+    void persist(saveMeta("collections", collections));
+  }
+  taskLog = storedLog ?? emptyTaskLog("");
+  refreshCategories();
+}
+
+function refreshCategories() {
+  const named = collections
+    .filter((collection) => !collection.deletedAt)
+    .sort((a, b) => a.position - b.position)
+    .map((collection) => collection.name);
+  // Keep every piece's collection listed, even one that arrived before its collection record.
+  categories = [...named, ...new Set(items.map((item) => item.category).filter((name) => !named.includes(name)))];
 }
 
 void init();

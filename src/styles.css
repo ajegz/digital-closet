@@ -284,6 +284,36 @@ button.task:active { transform: translateY(1px); }
 .sheet-actions { position: sticky; bottom: 0; z-index: 1; display: flex; gap: 10px; margin: 0 calc(var(--gutter) * -1); padding: 12px var(--gutter) calc(16px + var(--safe-bottom)); background: var(--bg); border-top: 2px solid var(--line); }
 .sheet-actions .btn-primary { flex: 1; }
 
+/* ---------- Account and sync ---------- */
+.account-button { position: relative; width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border: 2px solid var(--line); border-bottom-width: 4px; border-radius: 50%; background: var(--bg); color: var(--muted); transition: transform .1s; }
+.account-button:active { transform: translateY(2px); border-bottom-width: 2px; }
+.account-button .sync-dot { position: absolute; right: -2px; bottom: -2px; }
+.sync-dot { width: 14px; height: 14px; border: 3px solid var(--bg); border-radius: 50%; background: var(--faint); }
+.sync-dot.is-large { width: 18px; height: 18px; flex: 0 0 18px; border: 0; }
+.sync-dot[data-state="synced"] { background: var(--leaf); }
+.sync-dot[data-state="syncing"] { background: var(--sky); animation: pulse 1s ease-in-out infinite alternate; }
+.sync-dot[data-state="error"] { background: var(--berry); }
+.account-card { padding-bottom: calc(24px + var(--safe-bottom)); }
+.account-step { display: grid; gap: 14px; }
+.account-mascot { justify-self: center; }
+.account-mascot svg { width: 96px; height: 96px; }
+.account-text { color: var(--muted); }
+.account-text strong { color: var(--ink); overflow-wrap: anywhere; }
+.account-step .btn-primary { width: 100%; }
+.account-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.text-button { min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--sky-text); font-size: 15px; font-weight: 800; }
+.text-button:disabled { color: var(--faint); cursor: default; }
+#codeInput { font-size: 24px; font-weight: 900; letter-spacing: .3em; text-align: center; }
+.account-email { margin-top: -8px; color: var(--muted); font-weight: 800; overflow-wrap: anywhere; }
+.sync-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.sync-text { flex: 1; min-width: 0; display: grid; }
+.sync-text strong { font-size: 17px; font-weight: 900; }
+.sync-text span { color: var(--muted); font-size: 14px; }
+.sync-card .btn { min-height: 44px; padding: 0 12px; font-size: 13px; }
+.account-note { color: var(--muted); font-size: 14px; text-align: center; }
+@keyframes pulse { to { opacity: .45; } }
+@media (min-width: 600px) { .account-card { padding-bottom: 24px; } }
+
 /* ---------- Feedback banner ---------- */
 .toast { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 12px); z-index: 40; width: calc(100% - 2 * var(--gutter)); max-width: 480px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--leaf-tint); color: var(--leaf-text); box-shadow: 0 4px 0 rgba(0, 0, 0, .08); animation: toast-up .2s ease-out; }
 .toast.is-error { background: var(--berry-tint); color: var(--berry-text); }

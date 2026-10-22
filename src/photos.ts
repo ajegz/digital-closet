@@ -53,3 +53,25 @@ export async function processPhoto(file: File): Promise<ProcessedPhoto> {
     URL.revokeObjectURL(url);
   }
 }
+
+export function dataUrlToBlob(dataUrl: string) {
+  const [header, body] = dataUrl.split(",");
+  const type = /^data:([^;,]+)/.exec(header)?.[1] ?? "application/octet-stream";
+  const bytes = Uint8Array.from(atob(body), (char) => char.charCodeAt(0));
+  return new Blob([bytes], { type });
+}
+
+export function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Re-encodes a stored photo, for pieces saved before upload-time compression existed. */
+export function recompressDataUrl(dataUrl: string) {
+  const blob = dataUrlToBlob(dataUrl);
+  return processPhoto(new File([blob], "photo", { type: blob.type }));
+}

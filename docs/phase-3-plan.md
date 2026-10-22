@@ -1,6 +1,6 @@
 # Phase 3 plan: accounts and cloud sync (Supabase)
 
-Status: **backend created 2026-10-22**; app integration (sync engine, account sheet) is next.
+Status: **backend created and app integration built 2026-10-22**: `src/sync.ts` (engine), `src/account.ts` (sheet), `src/supabase.ts` (client). Waiting on the email-template change and the first real sign-in to test sync end to end.
 
 | | |
 |---|---|

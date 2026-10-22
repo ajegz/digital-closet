@@ -1,3 +1,6 @@
+/** Placeholder for brand and color the user hasn't filled in. Stored as null in the cloud. */
+export const UNKNOWN = "To identify";
+
 export type Status = "Confirmed" | "Needs review";
 export type Garment = "tee" | "shirt" | "pants" | "coat";
 
@@ -31,4 +34,26 @@ export interface ClosetItem {
   purchasedOn?: string;
   store?: string;
   care?: string;
+
+  // Sync bookkeeping (Phase 3). Pieces saved before sync existed have none of these, which counts as "needs sending".
+  /** False once the cloud has this exact version. */
+  dirty?: boolean;
+  /** True when the photo changed on this device and hasn't been uploaded. */
+  photoDirty?: boolean;
+  /** Storage paths of the uploaded photo; a new photo gets new paths so other devices notice. */
+  photoPath?: string;
+  thumbPath?: string;
+  /** Set when deleted while signed in; kept until the deletion reaches the cloud. */
+  deletedAt?: number;
+  /** The cloud's synced_at for the version this device has, to skip re-applying it. */
+  remoteSyncedAt?: string;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  position: number;
+  updatedAt: number;
+  deletedAt?: number;
+  dirty?: boolean;
 }

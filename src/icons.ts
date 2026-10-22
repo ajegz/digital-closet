@@ -21,6 +21,7 @@ export const icons = {
   target: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01" stroke-width="3.5"/>'),
   check: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
   back: svg('<path d="M15 5 8 12l7 7"/>'),
+  user: svg('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.9-3.6 3.7-5.6 7-5.6s6.1 2 7 5.6"/>'),
   edit: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
   // Hangie, the Digital Closet mascot: a friendly green hanger.
   hangie: `<svg class="hangie" viewBox="0 0 120 120" aria-hidden="true">

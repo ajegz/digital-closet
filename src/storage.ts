@@ -33,8 +33,23 @@ async function run<T>(storeName: "items" | "meta", mode: IDBTransactionMode, act
 export const loadItems = () => run<ClosetItem[]>("items", "readonly", (store) => store.getAll());
 export const saveItem = (item: ClosetItem) => run("items", "readwrite", (store) => store.put(item));
 export const removeItem = (id: string) => run("items", "readwrite", (store) => store.delete(id));
+export const getItem = (id: string) => run<ClosetItem | undefined>("items", "readonly", (store) => store.get(id));
 
-// Small app-wide values: "categories" (collection names) and "taskLog" (today's task progress).
-export type MetaKey = "categories" | "taskLog";
+/** Wipes this device's closet, used when signing out. */
+export async function clearAll() {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(["items", "meta"], "readwrite");
+    transaction.objectStore("items").clear();
+    transaction.objectStore("meta").clear();
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+// Small app-wide values: "collections" (Collection records), "categories" (the pre-sync list of names,
+// read once to migrate), "taskLog" (today's task progress) and "sync" (account and pull cursors).
+export type MetaKey = "collections" | "categories" | "taskLog" | "sync";
 export const loadMeta = <T>(key: MetaKey) => run<T | undefined>("meta", "readonly", (store) => store.get(key));
 export const saveMeta = (key: MetaKey, value: unknown) => run("meta", "readwrite", (store) => store.put(value, key));
