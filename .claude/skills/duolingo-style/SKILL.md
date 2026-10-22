@@ -1,6 +1,6 @@
 ---
 name: duolingo-style
-description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell, XP/streak/quest game loop and the hanger mascot. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). It is the source of truth when design skills disagree (see §0); pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
+description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell, XP/levels and Today's-tasks game loop and the hanger mascot. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). It is the source of truth when design skills disagree (see §0); pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
 ---
 
 # Duolingo-style design system (Digital Closet)
@@ -47,7 +47,7 @@ Routing notes:
 | `--leaf-button` / `--leaf-button-ledge` | `#46a302` / `#357a01` | primary button face / ledge |
 | `--leaf-text` / `--leaf-tint` | `#3f7d00` / `#d7ffb8` | success text / success background |
 | `--sky` / `--sky-text` / `--sky-tint` / `--sky-line` | `#1cb0f6` / `#0b70aa` / `#ddf4ff` / `#84d8ff` | info, links, selected chip/tab |
-| `--flame` / `--flame-text` | `#ff9600` / `#b25f00` | streak icon / streak number |
+| `--flame` / `--flame-text` | `#ff9600` / `#b25f00` | task icon, the Phase 4 outfit streak |
 | `--sun` / `--sun-ledge` | `#ffc800` / `#e5a800` | XP, rewards, level badge |
 | `--berry` / `--berry-text` / `--berry-tint` | `#ff4b4b` / `#bb2525` / `#ffdfe0` | favourites, delete, errors |
 | `--grape` | `#ce82ff` | collections accent |
@@ -76,7 +76,7 @@ Routing notes:
 
 **Progress bar.** Height 16px, track `--line`, fill `--leaf` (or `--sun` for XP), radius 999px, with a lighter 4px highlight strip inset near the top of the fill (`::after`, white at 30% opacity). Animate width 300ms ease-out.
 
-**Stat pill (top bar).** Icon + bold number, no box. Streak = flame icon + `--flame-text`; XP = bolt icon + `--sun-ledge` number on a level badge.
+**Stat pill (top bar).** Icon + bold number, no box. XP = bolt icon + `#9a6b00` number. The Phase 4 outfit streak will sit beside it as flame icon + `--flame-text`.
 
 **Bottom tab bar (phones).** Fixed, white, 2px top border, `padding-bottom: env(safe-area-inset-bottom)`. 4 tabs + a raised center Add button (56px circle, leaf-button face with ledge). Each tab ≥56px tall, icon 26px above a 11px uppercase label. Active tab: icon and label `--sky-text`, a `--sky-tint` rounded background with 2px `--sky-line` border.
 
@@ -98,8 +98,8 @@ Routing notes:
 
 - **XP** (derived from the closet, not stored): 10 per piece, +5 with a photo, +5 with brand and colour filled in, +5 when marked Available (confirmed).
 - **Level**: every 100 XP. Show "Level N" badge and an XP bar to the next level.
-- **Streak**: consecutive days with at least one piece added or updated. Flame in the top bar; at 0 show a grey flame and an inviting nudge, not a warning.
-- **Daily quest**: "Add 3 pieces with photos today" with a progress bar; a celebration banner when completed.
+- **No streak yet.** `duo-retention`'s frequency check (2026-10-22): cataloging is front-loaded and occasional, not daily, so a daily streak would only manufacture guilt, and "any edit counts" rewarded busywork. The streak returns in **Phase 4** on "log today's outfit", which is genuinely daily and takes seconds. Give it a one-sentence reset rule and one free missed day per week.
+- **Today's tasks**: up to 3 tasks generated from what the closet is actually missing, easiest first: add a photo to 1 piece → confirm 2 pieces → add 3 new pieces (only while the closet has fewer than 20) → fill in details on 3 pieces. Only real progress counts (a first photo, a confirmation, a newly filled field, a new piece). Today's progress is added back into each target, so targets stay put as the backlog shrinks. Each open task is a button that takes you to the work. With no backlog the card says "All caught up". There's no penalty for skipping a day, and finishing all of them gets a celebration banner but no bonus XP.
 - **Celebrate** every save with a feedback banner showing the XP gained; a level-up gets its own banner.
 - Later phases add wear logging; "log today's outfit" becomes the main daily habit.
 

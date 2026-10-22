@@ -13,7 +13,9 @@ const UNTITLED = "Untitled piece";
 const RECENT_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const XP_PER_LEVEL = 100;
-const QUEST_TARGET = 3;
+// Until the closet holds this many pieces, "add new pieces" stays on the task ladder.
+const STARTER_CLOSET = 20;
+const MAX_TASKS = 3;
 const TOAST_MS = 5000;
 const COLLECTION_COLORS = ["var(--leaf)", "var(--sky)", "var(--grape)", "var(--flame)", "var(--berry)", "var(--sun-ledge)"];
 const TAB_TITLES: Record<Tab, string> = { closet: "Closet", favorites: "Favorites", recent: "Recent", collections: "Collections" };
@@ -34,6 +36,8 @@ const DETAIL_FIELDS: ((item: ClosetItem) => boolean)[] = [
   (item) => Boolean(item.store),
   (item) => Boolean(item.care)
 ];
+// Everything but the photo, which has its own task.
+const DESCRIBE_FIELDS = DETAIL_FIELDS.slice(1);
 
 // Shown only while the closet is empty so the first screen isn't blank. Never saved.
 const sampleItems: ClosetItem[] = [
@@ -45,7 +49,8 @@ const sampleItems: ClosetItem[] = [
 
 let items: ClosetItem[] = [];
 let categories = [...DEFAULT_CATEGORIES];
-let activityDays: string[] = [];
+// Dated "" so todayLog() replaces it on first use; calling dayKey() here would run before its helpers exist.
+let taskLog: TaskLog = emptyTaskLog("");
 let tab: Tab = "closet";
 let activeCategory = "all";
 let activeStatus = "all";
@@ -140,27 +145,110 @@ function itemXp(item: ClosetItem) {
 
 const totalXp = () => items.reduce((sum, item) => sum + itemXp(item), 0);
 const levelFor = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
-const questProgress = () => items.filter((item) => item.image && dayKey(item.createdAt) === dayKey()).length;
 
-function currentStreak() {
-  const days = new Set(activityDays);
-  const cursor = new Date();
-  cursor.setHours(12, 0, 0, 0);
-  // A streak stays alive until the end of the day after the last activity.
-  if (!days.has(dayKey(cursor.getTime()))) cursor.setDate(cursor.getDate() - 1);
-  let streak = 0;
-  while (days.has(dayKey(cursor.getTime()))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
+/* ---------- Today's tasks: a ladder built from what the closet is missing, easiest first ---------- */
+
+type TaskKind = "photo" | "confirm" | "add" | "describe";
+
+interface TaskLog {
+  day: string;
+  photo: number;
+  confirm: number;
+  add: number;
+  describe: number;
+  /** Tasks finished today stay ticked even if new pieces grow the backlog again. */
+  completed: TaskKind[];
 }
 
-function recordActivity() {
-  const today = dayKey();
-  if (activityDays.includes(today)) return;
-  activityDays = [...activityDays, today].slice(-400);
-  void persist(saveMeta("activityDays", activityDays));
+interface Task {
+  kind: TaskKind;
+  label: string;
+  target: number;
+  done: number;
+}
+
+function emptyTaskLog(day = dayKey()): TaskLog {
+  return { day, photo: 0, confirm: 0, add: 0, describe: 0, completed: [] };
+}
+
+const hasPhoto = (item: ClosetItem) => Boolean(item.image || item.thumb);
+const describedCount = (item: ClosetItem) => DESCRIBE_FIELDS.filter((isFilled) => isFilled(item)).length;
+
+function todayLog() {
+  if (taskLog.day !== dayKey()) taskLog = emptyTaskLog();
+  taskLog.completed ??= [];
+  return taskLog;
+}
+
+// Counts only real progress: a new piece, a first photo, a confirmation, or a field that was empty.
+function logProgress(before: ClosetItem | undefined, after: ClosetItem, added = 1) {
+  const log = todayLog();
+  if (!before) log.add += added;
+  else {
+    if (!hasPhoto(before) && hasPhoto(after)) log.photo += 1;
+    if (before.status !== "Confirmed" && after.status === "Confirmed") log.confirm += 1;
+    if (describedCount(after) > describedCount(before)) log.describe += 1;
+  }
+  void persist(saveMeta("taskLog", log));
+}
+
+function todaysTasks(): Task[] {
+  const log = todayLog();
+  // Adding today's progress back keeps a task's target steady while the backlog shrinks.
+  const missingPhoto = items.filter((item) => !hasPhoto(item)).length + log.photo;
+  const needsReview = items.filter((item) => item.status === "Needs review").length + log.confirm;
+  const undescribed = items.filter((item) => describedCount(item) < DESCRIBE_FIELDS.length).length + log.describe;
+  const starter = items.length - log.add < STARTER_CLOSET;
+  const ladder: Omit<Task, "label">[] = [
+    { kind: "photo", target: Math.min(1, missingPhoto), done: log.photo },
+    { kind: "confirm", target: Math.min(2, needsReview), done: log.confirm },
+    { kind: "add", target: starter ? 3 : 0, done: log.add },
+    { kind: "describe", target: Math.min(3, undescribed), done: log.describe }
+  ];
+  const labels: Record<TaskKind, (count: number) => string> = {
+    photo: (count) => `Add a photo to ${plural(count, "piece")}`,
+    confirm: (count) => `Confirm ${plural(count, "piece")}`,
+    add: (count) => `Add ${plural(count, "new piece")}`,
+    describe: (count) => `Fill in details on ${plural(count, "piece")}`
+  };
+  const tasks = ladder
+    .map((task) => (log.completed.includes(task.kind) ? { ...task, target: task.done } : task))
+    .filter((task) => task.target > 0)
+    .slice(0, MAX_TASKS)
+    .map((task) => ({ ...task, done: Math.min(task.done, task.target), label: labels[task.kind](task.target) }));
+  const newlyDone = tasks.filter((task) => task.done >= task.target && !log.completed.includes(task.kind));
+  if (newlyDone.length) {
+    log.completed = [...log.completed, ...newlyDone.map((task) => task.kind)];
+    void persist(saveMeta("taskLog", log));
+  }
+  return tasks;
+}
+
+function allTasksDone() {
+  const tasks = todaysTasks();
+  return tasks.length > 0 && tasks.every((task) => task.done >= task.target);
+}
+
+function startTask(kind: TaskKind) {
+  const newestFirst = [...items].sort((a, b) => b.createdAt - a.createdAt);
+  if (kind === "add") {
+    openItemDialog();
+  } else if (kind === "photo") {
+    const item = newestFirst.find((entry) => !hasPhoto(entry));
+    if (item) openItemDialog(item, "photo");
+  } else if (kind === "describe") {
+    const item = newestFirst
+      .filter((entry) => describedCount(entry) < DESCRIBE_FIELDS.length)
+      .sort((a, b) => describedCount(a) - describedCount(b))[0];
+    if (item) openDetail(item.id);
+  } else {
+    activeStatus = "Needs review";
+    document.querySelectorAll<HTMLElement>("[data-status]").forEach((chip) => chip.classList.toggle("is-on", chip.dataset.status === activeStatus));
+    $("#filterRow").hidden = false;
+    $("#filterButton").setAttribute("aria-expanded", "true");
+    render();
+    $(".catalog-head").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 /* ---------- Routing ---------- */
@@ -345,8 +433,6 @@ function renderStats() {
   const xp = totalXp();
   const level = levelFor(xp);
   const levelXp = xp % XP_PER_LEVEL;
-  const streak = currentStreak();
-  const quest = Math.min(questProgress(), QUEST_TARGET);
 
   $("#todayLabel").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   $("#greeting").textContent = count ? `${plural(count, "piece")} and counting` : "Let’s fill your closet";
@@ -356,15 +442,7 @@ function renderStats() {
 
   $("#xpCount").textContent = String(xp);
   $("#xpPill").setAttribute("aria-label", `${xp} XP, level ${level}`);
-  $("#streakCount").textContent = String(streak);
-  const streakPill = $("#streakPill");
-  streakPill.classList.toggle("is-cold", streak === 0);
-  streakPill.setAttribute("aria-label", streak ? `${streak}-day streak` : "No streak yet. Add a piece to start one");
-
-  $("#questBar").style.width = `${(quest / QUEST_TARGET) * 100}%`;
-  $("#questCount").textContent = `${quest}/${QUEST_TARGET}`;
-  $("#questTitle").textContent = quest >= QUEST_TARGET ? "Quest complete. See you tomorrow!" : `Add ${QUEST_TARGET} pieces with photos`;
-  document.querySelector(".quest-card")?.classList.toggle("is-done", quest >= QUEST_TARGET);
+  renderTasks();
 
   const withPhotos = items.filter((item) => item.image).length;
   const latest = Math.max(0, ...items.map((item) => item.updatedAt));
@@ -372,6 +450,24 @@ function renderStats() {
   $("#missingStat").textContent = String(items.filter((item) => item.status === "Needs review").length);
   $("#photoStat").textContent = `${count ? Math.round((withPhotos / count) * 100) : 0}%`;
   $("#lastUpdatedStat").textContent = latest ? relativeDay(latest) : "—";
+}
+
+function renderTasks() {
+  const tasks = todaysTasks();
+  const done = tasks.filter((task) => task.done >= task.target).length;
+  const allDone = tasks.length > 0 && done === tasks.length;
+  $("#tasksCard").classList.toggle("is-done", allDone);
+  $("#tasksCount").hidden = !tasks.length;
+  $("#tasksCount").textContent = `${done}/${tasks.length}`;
+  $("#tasksTitle").textContent = !tasks.length ? "All caught up" : allDone ? "All done for today" : done ? `${done} of ${tasks.length} done` : "Quick wins for today";
+  $("#tasksEmpty").hidden = tasks.length > 0;
+  $("#taskList").innerHTML = tasks
+    .map((task) => {
+      const finished = task.done >= task.target;
+      const body = `<span class="task-check">${finished ? icons.check : ""}</span><span class="task-text">${task.label}</span><span class="task-progress">${task.done}/${task.target}</span>`;
+      return `<li>${finished ? `<div class="task is-done">${body}</div>` : `<button class="task" type="button" data-task="${task.kind}">${body}</button>`}</li>`;
+    })
+    .join("");
 }
 
 function renderCollections() {
@@ -421,13 +517,11 @@ function showToast({ kind = "success", title, message, xp, action }: ToastOption
   toastTimer = window.setTimeout(() => { toast.hidden = true; }, TOAST_MS);
 }
 
-function bumpStats() {
-  ["#xpPill", "#streakPill"].forEach((selector) => {
-    const pill = $(selector);
-    pill.classList.remove("is-bump");
-    void pill.offsetWidth;
-    pill.classList.add("is-bump");
-  });
+function bumpXp() {
+  const pill = $("#xpPill");
+  pill.classList.remove("is-bump");
+  void pill.offsetWidth;
+  pill.classList.add("is-bump");
 }
 
 /* ---------- Add / edit sheet ---------- */
@@ -521,13 +615,13 @@ function readDetails(formData: FormData) {
   };
 }
 
-function celebrate(xpBefore: number, questBefore: number, fallback: { title: string; message: string }) {
+function celebrate(xpBefore: number, tasksDoneBefore: boolean, fallback: { title: string; message: string }) {
   const xpAfter = totalXp();
   const xpGained = xpAfter - xpBefore;
   if (levelFor(xpAfter) > levelFor(xpBefore)) {
     showToast({ title: `Level ${levelFor(xpAfter)}!`, message: "Your closet is leveling up.", xp: xpGained });
-  } else if (questBefore < QUEST_TARGET && questProgress() >= QUEST_TARGET) {
-    showToast({ title: "Daily quest complete!", message: `${QUEST_TARGET} pieces with photos today. Nice work.`, xp: xpGained });
+  } else if (!tasksDoneBefore && allTasksDone()) {
+    showToast({ title: "Today’s tasks done!", message: "Your closet is in better shape than this morning.", xp: xpGained > 0 ? xpGained : undefined });
   } else {
     showToast({ ...fallback, xp: xpGained > 0 ? xpGained : undefined });
   }
@@ -538,10 +632,10 @@ async function saveFromForm() {
   const files = Array.from(photoInput.files ?? []);
   const existing = items.find((entry) => entry.id === editingId);
   const xpBefore = totalXp();
-  const questBefore = questProgress();
+  const tasksDoneBefore = allTasksDone();
 
   if (!existing && files.length > 1) {
-    await saveMany(files, details, xpBefore, questBefore);
+    await saveMany(files, details, xpBefore, tasksDoneBefore);
     return;
   }
 
@@ -553,17 +647,17 @@ async function saveFromForm() {
     : { id: newId(), ...details, ...photo, favorite: false, createdAt: now, updatedAt: now };
 
   items = [item, ...items.filter((entry) => entry.id !== item.id)];
-  recordActivity();
+  logProgress(existing, item);
   itemDialog.close();
   render();
-  bumpStats();
-  celebrate(xpBefore, questBefore, existing
+  bumpXp();
+  celebrate(xpBefore, tasksDoneBefore, existing
     ? { title: "Saved", message: `${item.name} is up to date.` }
     : { title: "Nice!", message: `${item.name} is in your closet.` });
   await persist(saveItem(item));
 }
 
-async function saveMany(files: File[], details: ReturnType<typeof readDetails>, xpBefore: number, questBefore: number) {
+async function saveMany(files: File[], details: ReturnType<typeof readDetails>, xpBefore: number, tasksDoneBefore: boolean) {
   const created: ClosetItem[] = [];
   for (const [index, file] of files.entries()) {
     saveButton.textContent = `Adding ${index + 1} of ${files.length}…`;
@@ -574,11 +668,11 @@ async function saveMany(files: File[], details: ReturnType<typeof readDetails>, 
     created.push({ id: newId(), ...details, name, ...photo, favorite: false, createdAt: now, updatedAt: now });
   }
   items = [...created, ...items];
-  recordActivity();
+  logProgress(undefined, created[0], created.length);
   itemDialog.close();
   render();
-  bumpStats();
-  celebrate(xpBefore, questBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
+  bumpXp();
+  celebrate(xpBefore, tasksDoneBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
   await persist(Promise.all(created.map(saveItem)));
 }
 
@@ -644,6 +738,10 @@ $(".tabbar").addEventListener("click", (event) => {
 });
 
 $("#addFab").addEventListener("click", () => openItemDialog());
+$("#taskList").addEventListener("click", (event) => {
+  const task = (event.target as Element).closest<HTMLElement>("[data-task]");
+  if (task) startTask(task.dataset.task as TaskKind);
+});
 
 grid.addEventListener("click", (event) => {
   const target = event.target as Element;
@@ -777,10 +875,10 @@ async function init() {
   renderChipOptions($("#weatherField"), "weather", WEATHER);
   renderChipOptions($("#occasionField"), "occasions", OCCASIONS);
   try {
-    const [storedItems, storedCategories, storedDays] = await Promise.all([loadItems(), loadMeta<string[]>("categories"), loadMeta<string[]>("activityDays")]);
+    const [storedItems, storedCategories, storedLog] = await Promise.all([loadItems(), loadMeta<string[]>("categories"), loadMeta<TaskLog>("taskLog")]);
     items = storedItems;
     categories = storedCategories ?? categories;
-    activityDays = storedDays ?? [];
+    taskLog = storedLog ?? taskLog;
   } catch (error) {
     console.error(error);
     showToast({ kind: "error", title: "Storage is off", message: "This browser can’t save your closet, so changes will be lost on refresh." });

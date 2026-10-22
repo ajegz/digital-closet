@@ -34,7 +34,7 @@ export const loadItems = () => run<ClosetItem[]>("items", "readonly", (store) =>
 export const saveItem = (item: ClosetItem) => run("items", "readwrite", (store) => store.put(item));
 export const removeItem = (id: string) => run("items", "readwrite", (store) => store.delete(id));
 
-// Small app-wide values: "categories" (collection names) and "activityDays" (streak history).
-export type MetaKey = "categories" | "activityDays";
+// Small app-wide values: "categories" (collection names) and "taskLog" (today's task progress).
+export type MetaKey = "categories" | "taskLog";
 export const loadMeta = <T>(key: MetaKey) => run<T | undefined>("meta", "readonly", (store) => store.get(key));
 export const saveMeta = (key: MetaKey, value: unknown) => run("meta", "readwrite", (store) => store.put(value, key));

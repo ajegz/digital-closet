@@ -83,9 +83,6 @@ input::placeholder { color: var(--faint); }
 .topbar-stats { display: flex; gap: 14px; }
 .stat-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 17px; font-weight: 900; min-height: 44px; }
 .stat-pill-icon svg { width: 26px; height: 26px; }
-.stat-pill.is-streak { color: var(--flame-text); }
-.stat-pill.is-streak .stat-pill-icon { color: var(--flame); }
-.stat-pill.is-streak.is-cold, .stat-pill.is-streak.is-cold .stat-pill-icon { color: var(--faint); }
 .stat-pill.is-xp { color: #9a6b00; }
 .stat-pill.is-xp .stat-pill-icon { color: var(--sun); }
 .stat-pill.is-bump { animation: bump .3s var(--pop); }
@@ -116,14 +113,28 @@ input::placeholder { color: var(--faint); }
 .level-badge { flex: 0 0 auto; padding: 3px 10px; border-radius: 999px; background: var(--sun); color: var(--ink); font-size: 13px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; box-shadow: 0 3px 0 var(--sun-ledge); }
 .level-meta { font-size: 14px; color: var(--muted); }
 
-.quest-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
-.quest-icon { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 14px; background: var(--sun-tint); color: var(--flame); }
-.quest-icon svg { width: 28px; height: 28px; }
-.quest-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
-.quest-title { font-size: 17px; font-weight: 800; }
-.quest-count { font-size: 15px; font-weight: 900; color: var(--muted); }
-.quest-card.is-done .quest-icon { background: var(--leaf-tint); color: var(--leaf-text); }
-.quest-card.is-done .quest-count { color: var(--leaf-text); }
+.tasks-card { display: grid; gap: 10px; padding: 14px 16px 8px; }
+.tasks-head { display: flex; align-items: center; gap: 14px; }
+.tasks-icon { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 14px; background: var(--sun-tint); color: var(--flame); }
+.tasks-icon svg { width: 28px; height: 28px; }
+.tasks-heading { flex: 1; min-width: 0; }
+.tasks-title { font-size: 17px; font-weight: 800; }
+.tasks-count { font-size: 15px; font-weight: 900; color: var(--muted); }
+.tasks-card.is-done .tasks-icon { background: var(--leaf-tint); color: var(--leaf-text); }
+.tasks-card.is-done .tasks-count { color: var(--leaf-text); }
+.tasks-empty { padding: 0 0 8px; color: var(--muted); }
+.task-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.task-list li + li { border-top: 2px solid var(--line); }
+.task { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 6px 4px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); text-align: left; font-weight: 800; }
+button.task:hover { background: var(--surface); }
+button.task:active { transform: translateY(1px); }
+.task-check { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border: 2px solid var(--line); border-radius: 50%; color: #fff; }
+.task-check svg { width: 16px; height: 16px; stroke-width: 3.5; }
+.task-text { flex: 1; min-width: 0; }
+.task-progress { color: var(--muted); font-size: 14px; font-weight: 900; }
+.task.is-done .task-check { background: var(--leaf); border-color: var(--leaf-ledge); }
+.task.is-done .task-text { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+.task.is-done .task-progress { color: var(--leaf-text); }
 
 .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .stat-tile { padding: 12px 14px; display: grid; gap: 2px; }
@@ -329,7 +340,7 @@ input::placeholder { color: var(--faint); }
   .detail-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
   .detail-photo { position: sticky; top: 96px; }
   .stats-grid { grid-column: 1 / -1; }
-  .quest-card { align-self: stretch; }
+  .tasks-card { align-self: stretch; align-content: start; }
   .toast { bottom: 24px; left: 248px; }
 }
 

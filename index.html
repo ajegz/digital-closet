@@ -25,7 +25,6 @@
         <header class="topbar">
           <h1 class="topbar-title" id="screenTitle">Closet</h1>
           <div class="topbar-stats">
-            <span class="stat-pill is-streak" id="streakPill"><span class="stat-pill-icon" data-icon="flame"></span><b id="streakCount">0</b></span>
             <span class="stat-pill is-xp" id="xpPill"><span class="stat-pill-icon" data-icon="bolt"></span><b id="xpCount">0</b></span>
           </div>
         </header>
@@ -46,14 +45,17 @@
                 <div class="hero-mascot" data-icon="hangie"></div>
               </section>
 
-              <section class="quest-card card" aria-labelledby="questTitle">
-                <span class="quest-icon" data-icon="target"></span>
-                <div class="quest-body">
-                  <p class="eyebrow">Daily quest</p>
-                  <h2 class="quest-title" id="questTitle">Add 3 pieces with photos</h2>
-                  <div class="progress"><span id="questBar"></span></div>
+              <section class="tasks-card card" id="tasksCard" aria-labelledby="tasksTitle">
+                <div class="tasks-head">
+                  <span class="tasks-icon" data-icon="target"></span>
+                  <div class="tasks-heading">
+                    <p class="eyebrow">Today’s tasks</p>
+                    <h2 class="tasks-title" id="tasksTitle">Quick wins for today</h2>
+                  </div>
+                  <span class="tasks-count" id="tasksCount">0/0</span>
                 </div>
-                <span class="quest-count" id="questCount">0/3</span>
+                <ol class="task-list" id="taskList"></ol>
+                <p class="tasks-empty" id="tasksEmpty" hidden>Every piece has a photo, details and a confirmed status. Add new pieces as you get them.</p>
               </section>
 
               <section class="stats-grid" aria-label="Closet summary">
