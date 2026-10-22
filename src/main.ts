@@ -121,6 +121,7 @@ $("#resetButton").addEventListener("click", () => {
   renderItems();
 });
 
+itemDialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => itemDialog.close()));
 $("#addItemButton").addEventListener("click", () => itemDialog.showModal());
 $("#uploadButton").addEventListener("click", () => itemDialog.showModal());
 $<HTMLInputElement>("#hiddenUploadInput").addEventListener("change", (event) => {
