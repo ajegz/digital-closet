@@ -1,6 +1,14 @@
 # Phase 3 plan: accounts and cloud sync (Supabase)
 
-Status: **draft, waiting on decisions** (see "Decisions needed"). Nothing has been created in Supabase.
+Status: **backend created 2026-10-22**; app integration (sync engine, account sheet) is next.
+
+| | |
+|---|---|
+| Project | `digital-closet` (ref `hjmeabidvbkemmwcfifz`), org MJ's Personal Projects, free plan, $0/month |
+| Region | Singapore (`ap-southeast-1`) |
+| Migrations | `supabase/migrations/` (source of truth; the SQL below is the original sketch) |
+| Client config | `.env.local` (gitignored); template in `.env.example` |
+| Verified | RLS tested with two throwaway users in a rolled-back transaction; security advisor: no findings |
 
 ## Goals
 
@@ -128,6 +136,11 @@ create policy "Own items: remove" on public.items for delete to authenticated us
 4. Tombstones, background triggers, offline handling, sign-out cleanup.
 5. Test two browsers signed into one account, plus a second account that must see nothing.
 
-## Decisions needed
+## Decisions (2026-10-22)
 
-See the summary in chat; answers get recorded here before building.
+- **Project:** new dedicated project on the current account (its second and last free slot).
+- **Region:** Singapore.
+- **Who signs in:** just MJ for now. Turn off public sign-ups once that account exists.
+- **Email:** Supabase's built-in sender while it's one user. Set up a custom SMTP sender (for example Resend) before inviting anyone.
+- **Refinements while building:** the trigger function lives in a non-exposed `private` schema, and collection names are unique only among non-deleted collections (partial unique index), so a deleted collection can be recreated.
+- **Later:** purging tombstones older than 30 days isn't scheduled yet; the sync engine or a cron job will do it.
