@@ -1,6 +1,6 @@
 ---
 name: duolingo-style
-description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell, XP/streak/quest game loop and the hanger mascot. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). Pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
+description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell, XP/streak/quest game loop and the hanger mascot. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). It is the source of truth when design skills disagree (see §0); pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
 ---
 
 # Duolingo-style design system (Digital Closet)
@@ -8,6 +8,28 @@ description: Digital Closet's playful, Duolingo-inspired, mobile-first design sy
 Inspired by Duolingo's energy — bright, chunky, friendly, rewarding — but it is **our own** brand. Never use Duolingo's name, owl, logo, fonts or illustrations. Our mascot is **Hangie**, a green hanger buddy (see `src/icons.ts`).
 
 The tokens live in `:root` at the top of `src/styles.css`. Use the variables; never hard-code a colour that has a token.
+
+## 0. Skill priority
+
+This file is the project's committed design brief **and** its design-engineering layer. Several other design skills are installed in `.claude/skills/`; when they disagree, the higher item wins:
+
+1. **The user's request in the conversation.**
+2. **duolingo-style (this file)** — tokens, components, motion values, copy voice and game-loop rules. Every other skill's advice is filtered through it.
+3. **mobile-ux-optimizer** — viewport, touch targets, safe areas, gestures. It overrides this file only on those mechanics.
+4. **frontend-design** — the process for a new screen (plan → review against the brief → build → critique) and UX-writing rules. Its "generic tells" list (all-caps labels, eyebrows over headings, `A · B` meta strings) loses where this file pins a choice: uppercase button and tab labels are part of our brief. Use the list as a polish prompt instead: drop an eyebrow or a middle dot when it carries no information.
+5. **duo-\* skills** — *rationale only*: why a pattern works and when it doesn't. Never take token values, easing curves or fonts from them (they say so themselves).
+   - `duo-design` — motion, celebration, character and accessibility rationale
+   - `duo-gamification` — XP, levels, quests, celebrations
+   - `duo-retention` — streaks and habit loops. Run its frequency check before adding or changing any daily mechanic.
+   - `duo-voice` — copy for banners, errors, empty states and notifications
+   - `duolingo` — the router; use it only to choose among the four above
+
+Routing notes:
+
+- When the `duolingo` router hands UI craft to "design-engineering", that means **this file**. Don't suggest installing `AgentsORG/design-engineering`.
+- Links to duo skills that aren't installed (`duo-product`, `duo-growth`, `duo-streak-mechanics`, …) are dead ends: skip them, and don't install more of the pack without asking the user.
+- Motion conflict: the bouncy `--pop` easing is only for rewards (XP, level-up, favouriting). Everything else uses `ease-out` (§4).
+- Nothing from the duo-\* references licenses Duolingo's fonts, owl, names or brand assets.
 
 ## 1. Principles
 

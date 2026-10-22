@@ -1,0 +1,40 @@
+---
+name: duo-retention-forever-product
+summary: Optimize for users who stay for years, not quarters; every roadmap decision is judged against long-term retention.
+metadata:
+  internal: true
+---
+
+# Forever Product
+
+## Concept
+
+A "forever product" is one judged by lifetime user value, not next-quarter revenue. Acquisition is a feeder; retention is the actual asset. The frame inverts how most teams reason about tradeoffs: when short-term gains conflict with long-term return, long-term wins by default.
+
+## What Duolingo does
+
+Source: blog.duolingo.com/duolingo-company-strategy (Duolingo blog, 2025-04-07; accessed 2026-09-22) — Duolingo states the position and, unusually, names the tactics it is refusing: *"Spammy notifications, deceptive patterns, and heavy paid acquisition are short-term tactics."* The stated alternative is long-term engagement, on the grounds that "motivation is the hardest part of learning." They run **750+ A/B tests per quarter** against that.
+
+The structural reason they can hold the line is the flywheel: **~80% of users are acquired organically**, not bought, so growth does not depend on a payback window (blog.duolingo.com/growth-model-duolingo (Duolingo blog, 2023-02-17; accessed 2026-09-22)).
+
+The operating version of the principle is blunter. Duolingo's quality metric, Time Spent Learning Well, deliberately accepts sessions that do not move it — a quick Ramp Up Challenge, or just extending the streak — under the philosophy **"they can't learn if they churn"** (blog.duolingo.com/time-spent-learning-well (Duolingo blog, 2024-06-13; accessed 2026-09-22)). A shallow day that prevents a break outranks a deep day that causes burnout.
+
+The Duolingo Handbook (2025), Principle #1 *Take the Long View*, states the same rule as a test: *"If it helps in the short-term, but hurts Duolingo in the long-term, it's not right."* (handbook.duolingo.com)
+
+## The transferable pattern
+
+1. Pick one long-term metric (cohort retention at week 12, week 26, or year 1).
+2. Make every roadmap decision name its impact on that metric, even when it's negative.
+3. Build a cultural permission to refuse short-term wins. Without that permission, the long view loses every quarter to whoever owns the revenue number.
+
+Tension: this only works if the company can afford the long view. Cash-runway-constrained teams sometimes *must* take short-term moves; the discipline is to know when you're doing it and to mark a return date.
+
+## Apply to your product
+
+- Name your forever metric. Not DAU. Not signups. The retained-cohort number.
+- Find one decision in your last quarter that helped short-term and hurt long-term. Would you make it again?
+- What's a feature you've delayed because it's "not right yet"? Is "not right" a quality bar or an excuse?
+
+## See also
+
+[[habit-loop]] · [[retention-vs-revenue]] · [[../duo-product/references/take-the-long-view]] · [[../duo-product/references/hundred-year-brand]]
