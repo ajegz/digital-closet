@@ -15,9 +15,9 @@
       <nav class="tabbar" aria-label="Main">
         <a class="brand" href="#closet"><span class="brand-mascot" data-icon="hangie"></span><span>digital closet</span></a>
         <a class="tab" href="#closet" data-tab="closet"><span class="tab-icon" data-icon="hanger"></span><span class="tab-label">Closet</span></a>
-        <a class="tab" href="#favorites" data-tab="favorites"><span class="tab-icon" data-icon="heart"></span><span class="tab-label">Favorites</span></a>
-        <button class="add-fab" id="addFab" type="button" aria-label="Add a piece"><span class="add-fab-icon" data-icon="plus"></span><span class="add-fab-label">Add piece</span></button>
-        <a class="tab" href="#recent" data-tab="recent"><span class="tab-icon" data-icon="clock"></span><span class="tab-label">Recent</span></a>
+        <a class="tab" href="#outfits" data-tab="outfits"><span class="tab-icon" data-icon="layers"></span><span class="tab-label">Outfits</span></a>
+        <button class="add-fab" id="addFab" type="button" aria-label="Add" aria-haspopup="dialog"><span class="add-fab-icon" data-icon="plus"></span><span class="add-fab-label">Add</span></button>
+        <a class="tab" href="#worn" data-tab="worn"><span class="tab-icon" data-icon="calendar"></span><span class="tab-label">Worn</span></a>
         <a class="tab" href="#collections" data-tab="collections"><span class="tab-icon" data-icon="collections"></span><span class="tab-label">Collections</span></a>
       </nav>
 
@@ -57,8 +57,14 @@
               <section class="stats-grid" aria-label="Closet summary">
                 <div class="stat-tile card"><span class="stat-label">Pieces</span><strong id="itemStat">0</strong></div>
                 <div class="stat-tile card"><span class="stat-label">Need review</span><strong id="missingStat">0</strong></div>
-                <div class="stat-tile card"><span class="stat-label">With photos</span><strong id="photoStat">0%</strong></div>
-                <div class="stat-tile card"><span class="stat-label">Last updated</span><strong id="lastUpdatedStat">—</strong></div>
+                <div class="stat-tile card"><span class="stat-label">Most worn</span><strong id="mostWornStat">—</strong><span class="stat-note" id="mostWornNote">Log outfits to see this</span></div>
+                <div class="stat-tile card"><span class="stat-label">Not worn in 90 days</span><strong id="unwornStat">0</strong></div>
+              </section>
+
+              <section class="rediscover" id="rediscover" aria-labelledby="rediscoverTitle" hidden>
+                <h2 class="section-title" id="rediscoverTitle">Rediscover</h2>
+                <p class="section-sub">Pieces you haven’t worn in a while.</p>
+                <div class="rediscover-row" id="rediscoverRow"></div>
               </section>
             </div>
 
@@ -109,12 +115,46 @@
                   <div class="detail-progress-head"><strong id="detailProgressTitle">Details</strong><span id="detailProgressCount">0/11</span></div>
                   <div class="progress"><span id="detailProgressBar"></span></div>
                 </div>
+                <section class="wear-card card" aria-label="Wear history">
+                  <div class="wear-stats">
+                    <div><strong id="wearCount">0</strong><span>times worn</span></div>
+                    <div><strong id="wearLast">—</strong><span>last worn</span></div>
+                    <div><strong id="wearCost">—</strong><span>per wear</span></div>
+                  </div>
+                  <button class="btn btn-secondary" id="woreTodayButton" type="button">Wore it today</button>
+                  <p class="wear-outfits" id="detailOutfits" hidden></p>
+                </section>
                 <dl class="detail-list card" id="detailList"></dl>
                 <section class="detail-care card" id="detailCare" aria-labelledby="detailCareTitle">
                   <h3 id="detailCareTitle">Care</h3>
                   <p id="detailCareText"></p>
                 </section>
               </div>
+            </div>
+          </section>
+
+          <section class="screen" id="outfitsScreen" aria-labelledby="outfitsTitle" hidden>
+            <div class="catalog-head">
+              <h2 class="section-title" id="outfitsTitle">Your outfits <span class="count-pill" id="outfitCount">0</span></h2>
+              <button class="btn btn-secondary" id="newOutfitButton" type="button">New outfit</button>
+            </div>
+            <div class="outfit-grid" id="outfitGrid"></div>
+            <div class="empty-state" id="outfitsEmpty" hidden>
+              <div class="empty-mascot" data-icon="hangie"></div>
+              <h3>No outfits yet</h3>
+              <p>Save the pieces you like to wear together, then log them in one tap.</p>
+              <button class="btn btn-secondary" type="button" data-open-picker="outfit">Create an outfit</button>
+            </div>
+          </section>
+
+          <section class="screen" id="wornScreen" aria-labelledby="wornTitle" hidden>
+            <section class="today-card card" id="todayCard" aria-label="Today"></section>
+            <h2 class="section-title" id="wornTitle">History <span class="count-pill" id="wornCount">0</span></h2>
+            <div class="worn-list" id="wornList"></div>
+            <div class="empty-state" id="wornEmpty" hidden>
+              <div class="empty-mascot" data-icon="hangie"></div>
+              <h3>Nothing logged yet</h3>
+              <p>Log what you wear to see your most-worn pieces and cost per wear.</p>
             </div>
           </section>
 
@@ -228,6 +268,38 @@
           <p class="account-text">Cloud backup isn’t set up in this version of the app, so your closet is saved in this browser only.</p>
         </section>
       </div>
+    </dialog>
+
+    <dialog class="sheet" id="addMenu" aria-labelledby="addMenuTitle">
+      <div class="sheet-card add-menu-card">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <button class="sheet-close" type="button" data-close-menu aria-label="Close"><span data-icon="close"></span></button>
+        <h2 class="sheet-title" id="addMenuTitle">What would you like to add?</h2>
+        <button class="menu-option" type="button" data-add="piece"><span class="menu-icon is-leaf" data-icon="camera"></span><span class="menu-text"><strong>Add a piece</strong><small>A photo and details of something you own</small></span></button>
+        <button class="menu-option" type="button" data-add="log"><span class="menu-icon is-sky" data-icon="calendar"></span><span class="menu-text"><strong>Log what I wore</strong><small>Today or any other day</small></span></button>
+        <button class="menu-option" type="button" data-add="outfit"><span class="menu-icon is-grape" data-icon="layers"></span><span class="menu-text"><strong>Create an outfit</strong><small>Save pieces you wear together</small></span></button>
+      </div>
+    </dialog>
+
+    <dialog class="sheet" id="pickerDialog" aria-labelledby="pickerTitle">
+      <form class="sheet-card" id="pickerForm" novalidate>
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <button class="sheet-close" type="button" data-close-picker aria-label="Close"><span data-icon="close"></span></button>
+        <p class="eyebrow" id="pickerEyebrow">New outfit</p>
+        <h2 class="sheet-title" id="pickerTitle">Put an outfit together</h2>
+        <button class="btn btn-secondary picker-wear" id="pickerWearToday" type="button" hidden>Wear it today</button>
+        <label class="field" id="outfitNameField">Name<input id="outfitNameInput" maxlength="60" placeholder="e.g. Monday office" autocomplete="off" /></label>
+        <label class="field" id="wornOnField">Day<input id="wornOnInput" type="date" /></label>
+        <div class="picker-outfits" id="pickerOutfits" hidden></div>
+        <div class="picker-head"><strong id="pickerCount">Pick the pieces</strong></div>
+        <div class="chip-scroller" id="pickerFilters" role="group" aria-label="Filter pieces by collection"></div>
+        <div class="picker-grid" id="pickerGrid"></div>
+        <p class="form-error" id="pickerError" role="alert" hidden></p>
+        <div class="sheet-actions">
+          <button class="btn btn-danger" id="pickerDelete" type="button" hidden>Delete</button>
+          <button class="btn btn-primary" id="pickerSave" type="submit">Save</button>
+        </div>
+      </form>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden>

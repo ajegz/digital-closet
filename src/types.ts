@@ -49,6 +49,28 @@ export interface ClosetItem {
   remoteSyncedAt?: string;
 }
 
+/** Fields every synced record shares (outfits and wear logs; items have their own photo-aware set). */
+interface SyncedRecord {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
+  dirty?: boolean;
+  remoteSyncedAt?: string;
+}
+
+export interface Outfit extends SyncedRecord {
+  name: string;
+  itemIds: string[];
+}
+
+export interface WearLog extends SyncedRecord {
+  /** Local calendar day, YYYY-MM-DD. */
+  wornOn: string;
+  itemIds: string[];
+  outfitId?: string;
+}
+
 export interface Collection {
   id: string;
   name: string;

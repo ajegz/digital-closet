@@ -2,11 +2,11 @@ import "./styles.css";
 import { icons, type IconName } from "./icons";
 import { processPhoto } from "./photos";
 import { initAccount } from "./account";
-import { loadItems, loadMeta, removeItem, saveItem, saveMeta } from "./storage";
+import { loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord } from "./storage";
 import { isSignedIn, requestSync, startSync } from "./sync";
-import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Status, type Weather } from "./types";
+import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Outfit, type Status, type WearLog, type Weather } from "./types";
 
-type Tab = "closet" | "favorites" | "recent" | "collections";
+type Tab = "closet" | "favorites" | "recent" | "outfits" | "worn" | "collections";
 type EmptyAction = "add" | "reset" | "closet";
 
 const DEFAULT_CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Dresses", "Accessories"];
@@ -18,7 +18,10 @@ const STARTER_CLOSET = 20;
 const MAX_TASKS = 3;
 const TOAST_MS = 5000;
 const COLLECTION_COLORS = ["var(--leaf)", "var(--sky)", "var(--grape)", "var(--flame)", "var(--berry)", "var(--sun-ledge)"];
-const TAB_TITLES: Record<Tab, string> = { closet: "Closet", favorites: "Favorites", recent: "Recent", collections: "Collections" };
+const TAB_TITLES: Record<Tab, string> = { closet: "Closet", favorites: "Favorites", recent: "Recent", outfits: "Outfits", worn: "Worn", collections: "Collections" };
+// A piece added this long ago and not worn for UNWORN_DAYS counts as "not worn lately".
+const UNWORN_DAYS = 90;
+const NEW_PIECE_GRACE_DAYS = 14;
 // Fields that live inside the sheet's collapsed "More details" section.
 const MORE_FIELDS = ["material", "price", "purchasedOn", "store", "weather", "occasions", "care"];
 
@@ -49,6 +52,8 @@ const sampleItems: ClosetItem[] = [
 
 let items: ClosetItem[] = [];
 let collections: Collection[] = [];
+let outfits: Outfit[] = [];
+let wearLogs: WearLog[] = [];
 // Collection names in display order, plus any category a piece uses that has no collection record.
 let categories = [...DEFAULT_CATEGORIES];
 // Dated "" so todayLog() replaces it on first use; calling dayKey() here would run before its helpers exist.
@@ -81,6 +86,10 @@ const saveButton = $<HTMLButtonElement>("#saveItemButton");
 const formError = $<HTMLParagraphElement>("#formError");
 const collectionForm = $<HTMLFormElement>("#collectionForm");
 const collectionInput = $<HTMLInputElement>("#collectionInput");
+const addMenu = $<HTMLDialogElement>("#addMenu");
+const pickerDialog = $<HTMLDialogElement>("#pickerDialog");
+const outfitNameInput = $<HTMLInputElement>("#outfitNameInput");
+const wornOnInput = $<HTMLInputElement>("#wornOnInput");
 const toast = $<HTMLDivElement>("#toast");
 
 /* ---------- Helpers ---------- */
@@ -147,12 +156,9 @@ async function persistAndSync(task: Promise<unknown>) {
   requestSync();
 }
 
-/* ---------- Game loop (see duolingo-style skill §5) ---------- */
-
-
 /* ---------- Today's tasks: a ladder built from what the closet is missing, easiest first ---------- */
 
-type TaskKind = "photo" | "confirm" | "add" | "describe";
+type TaskKind = "log" | "photo" | "confirm" | "add" | "describe";
 
 interface TaskLog {
   day: string;
@@ -204,12 +210,14 @@ function todaysTasks(): Task[] {
   const undescribed = items.filter((item) => describedCount(item) < DESCRIBE_FIELDS.length).length + log.describe;
   const starter = items.length - log.add < STARTER_CLOSET;
   const ladder: Omit<Task, "label">[] = [
+    { kind: "log", target: items.length ? 1 : 0, done: todayLogs().length ? 1 : 0 },
     { kind: "photo", target: Math.min(1, missingPhoto), done: log.photo },
     { kind: "confirm", target: Math.min(2, needsReview), done: log.confirm },
     { kind: "add", target: starter ? 3 : 0, done: log.add },
     { kind: "describe", target: Math.min(3, undescribed), done: log.describe }
   ];
   const labels: Record<TaskKind, (count: number) => string> = {
+    log: () => "Log what you wore today",
     photo: (count) => `Add a photo to ${plural(count, "piece")}`,
     confirm: (count) => `Confirm ${plural(count, "piece")}`,
     add: (count) => `Add ${plural(count, "new piece")}`,
@@ -235,7 +243,9 @@ function allTasksDone() {
 
 function startTask(kind: TaskKind) {
   const newestFirst = [...items].sort((a, b) => b.createdAt - a.createdAt);
-  if (kind === "add") {
+  if (kind === "log") {
+    openPicker({ kind: "log" });
+  } else if (kind === "add") {
     openItemDialog();
   } else if (kind === "photo") {
     const item = newestFirst.find((entry) => !hasPhoto(entry));
@@ -258,8 +268,8 @@ function startTask(kind: TaskKind) {
 /* ---------- Routing ---------- */
 
 function applyHash(hash: string) {
-  // Back/forward while the sheet is open should leave the sheet, like a native app.
-  if (itemDialog.open) itemDialog.close();
+  // Back/forward while a sheet is open should leave the sheet, like a native app.
+  for (const dialog of [itemDialog, pickerDialog, addMenu]) if (dialog.open) dialog.close();
 
   if (hash.startsWith("#item-")) {
     const id = decodeURIComponent(hash.slice("#item-".length));
@@ -283,7 +293,7 @@ function applyHash(hash: string) {
     activeCategory = categories.includes(name) ? name : "all";
   } else {
     const name = hash.slice(1);
-    tab = name === "favorites" || name === "recent" || name === "collections" ? name : "closet";
+    tab = (["favorites", "recent", "outfits", "worn", "collections"] as const).find((entry) => entry === name) ?? "closet";
     activeCategory = "all";
   }
   render();
@@ -347,20 +357,26 @@ const EMPTY_ACTION_LABELS: Record<EmptyAction, string> = { add: "Add a piece", r
 
 function render() {
   const viewing = viewingItemId ? items.find((item) => item.id === viewingItemId) : undefined;
-  const onCollections = tab === "collections";
-  $("#itemScreen").hidden = !viewing;
-  $("#closetScreen").hidden = Boolean(viewing) || onCollections;
-  $("#collectionsScreen").hidden = Boolean(viewing) || !onCollections;
+  const screen = viewing ? "item" : tab === "outfits" || tab === "worn" || tab === "collections" ? tab : "closet";
+  $("#itemScreen").hidden = screen !== "item";
+  $("#closetScreen").hidden = screen !== "closet";
+  $("#outfitsScreen").hidden = screen !== "outfits";
+  $("#wornScreen").hidden = screen !== "worn";
+  $("#collectionsScreen").hidden = screen !== "collections";
   $("#dashboard").hidden = tab !== "closet" || activeCategory !== "all";
   $("#screenTitle").textContent = viewing ? "Piece" : TAB_TITLES[tab];
+  // Favorites and New are views inside the Closet tab.
+  const navTab = tab === "favorites" || tab === "recent" ? "closet" : tab;
   document.querySelectorAll<HTMLAnchorElement>(".tab").forEach((link) => {
-    if (link.dataset.tab === tab) link.setAttribute("aria-current", "page");
+    if (link.dataset.tab === navTab) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
 
   renderStats();
   if (viewing) renderDetail(viewing);
-  else if (onCollections) renderCollections();
+  else if (screen === "outfits") renderOutfits();
+  else if (screen === "worn") renderWorn();
+  else if (screen === "collections") renderCollections();
   else renderCatalog();
 }
 
@@ -370,9 +386,17 @@ function renderCatalog() {
   $("#viewTitle").textContent = title;
   $("#visibleCount").textContent = String(visible.length);
 
-  $("#categoryFilters").innerHTML = ["all", ...categories]
-    .map((name) => `<button class="chip${name === activeCategory ? " is-on" : ""}" data-category="${escapeHtml(name)}" type="button" aria-pressed="${name === activeCategory}">${name === "all" ? "All" : escapeHtml(name)}</button>`)
-    .join("");
+  const allOn = tab === "closet" && activeCategory === "all";
+  const viewChip = (view: "favorites" | "recent", label: string, icon = "") =>
+    `<button class="chip is-view${tab === view ? " is-on" : ""}" data-view="${view}" type="button" aria-pressed="${tab === view}">${icon}${label}</button>`;
+  $("#categoryFilters").innerHTML =
+    `<button class="chip${allOn ? " is-on" : ""}" data-category="all" type="button" aria-pressed="${allOn}">All</button>` +
+    viewChip("favorites", "Favorites", icons.heart) +
+    viewChip("recent", "New") +
+    `<span class="chip-divider" aria-hidden="true"></span>` +
+    categories
+      .map((name) => `<button class="chip${name === activeCategory ? " is-on" : ""}" data-category="${escapeHtml(name)}" type="button" aria-pressed="${name === activeCategory}">${escapeHtml(name)}</button>`)
+      .join("");
 
   grid.classList.toggle("is-list", layout === "list");
   grid.innerHTML = visible.map(cardHtml).join("");
@@ -427,6 +451,8 @@ function renderDetail(item: ClosetItem) {
     .map(([label, field, value]) => `<div class="detail-row"><dt>${label}</dt><dd>${value ? escapeHtml(value) : `<button class="detail-add" type="button" data-edit-field="${field}" aria-label="Add ${label.toLowerCase()}">Add</button>`}</dd></div>`)
     .join("") + `<div class="detail-row"><dt>Added</dt><dd>${relativeDay(item.createdAt)}</dd></div>`;
 
+  renderWearCard(item);
+
   $("#detailCareText").innerHTML = item.care
     ? escapeHtml(item.care)
     : `<button class="detail-add" type="button" data-edit-field="care">Add care notes</button>`;
@@ -437,14 +463,27 @@ function renderStats() {
 
   $("#todayLabel").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   $("#greeting").textContent = count ? `${plural(count, "piece")} and counting` : "Let’s fill your closet";
+  renderHeroToday();
   renderTasks();
 
-  const withPhotos = items.filter((item) => item.image).length;
-  const latest = Math.max(0, ...items.map((item) => item.updatedAt));
+  const stats = wearIndex();
+  const mostWorn = items.reduce<{ item?: ClosetItem; count: number }>((best, item) => {
+    const worn = stats.get(item.id)?.count ?? 0;
+    return worn > best.count ? { item, count: worn } : best;
+  }, { count: 0 });
   $("#itemStat").textContent = String(count);
   $("#missingStat").textContent = String(items.filter((item) => item.status === "Needs review").length);
-  $("#photoStat").textContent = `${count ? Math.round((withPhotos / count) * 100) : 0}%`;
-  $("#lastUpdatedStat").textContent = latest ? relativeDay(latest) : "—";
+  $("#mostWornStat").textContent = mostWorn.item?.name ?? "—";
+  $("#mostWornNote").textContent = mostWorn.item ? plural(mostWorn.count, "wear") : "Log outfits to see this";
+  const unworn = unwornPieces(stats);
+  $("#unwornStat").textContent = String(unworn.length);
+
+  // Only meaningful once there's a wear history to compare against.
+  $("#rediscover").hidden = !wearLogs.length || !unworn.length;
+  $("#rediscoverRow").innerHTML = unworn.slice(0, 8).map((item) => {
+    const last = stats.get(item.id)?.last;
+    return `<button class="mini-card" type="button" data-open-item="${escapeHtml(item.id)}">${thumbHtml(item, "mini-thumb")}<span class="mini-name">${escapeHtml(item.name)}</span><span class="mini-meta">${last ? `Last worn ${formatDay(last)}` : "Not worn yet"}</span></button>`;
+  }).join("");
 }
 
 function renderTasks() {
@@ -708,6 +747,290 @@ function createCollection(rawName: string) {
   showToast({ title: "Collection created", message: `${name} is ready for pieces.` });
 }
 
+/* ---------- Outfits and wear log ---------- */
+
+interface WearStats {
+  count: number;
+  /** Most recent day worn, YYYY-MM-DD. */
+  last?: string;
+}
+
+type PickerMode = { kind: "outfit"; outfit?: Outfit } | { kind: "log"; log?: WearLog; itemIds?: string[] };
+
+let picker: PickerMode = { kind: "outfit" };
+let pickerSelected = new Set<string>();
+let pickerCategory = "all";
+
+const dateFromKey = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+const formatDay = (key: string) => relativeDay(dateFromKey(key).getTime());
+const todayLogs = () => wearLogs.filter((log) => log.wornOn === dayKey());
+const itemLookup = () => new Map(items.map((item) => [item.id, item]));
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((id) => b.includes(id));
+
+// Times worn counts days, so logging the same piece twice in one day still counts once.
+function wearIndex() {
+  const days = new Map<string, Set<string>>();
+  for (const log of wearLogs) {
+    for (const id of log.itemIds) {
+      const set = days.get(id) ?? new Set<string>();
+      set.add(log.wornOn);
+      days.set(id, set);
+    }
+  }
+  const stats = new Map<string, WearStats>();
+  for (const [id, set] of days) stats.set(id, { count: set.size, last: [...set].sort().at(-1) });
+  return stats;
+}
+
+function unwornPieces(stats: Map<string, WearStats>) {
+  const cutoff = dayKey(Date.now() - UNWORN_DAYS * DAY_MS);
+  const settled = Date.now() - NEW_PIECE_GRACE_DAYS * DAY_MS;
+  return items
+    .filter((item) => item.createdAt < settled && (stats.get(item.id)?.last ?? "") < cutoff)
+    // Never worn first, then the longest since last worn.
+    .sort((a, b) => (stats.get(a.id)?.last ?? "").localeCompare(stats.get(b.id)?.last ?? "") || a.createdAt - b.createdAt);
+}
+
+function thumbHtml(item: ClosetItem | undefined, className = "thumb") {
+  if (!item) return "";
+  const photo = item.thumb ?? item.image;
+  const inner = photo
+    ? `<img src="${escapeHtml(photo)}" alt="" loading="lazy">`
+    : `<span class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></span>`;
+  return `<span class="${className}">${inner}</span>`;
+}
+
+function thumbStrip(ids: string[], max = 4) {
+  const lookup = itemLookup();
+  const pieces = ids.map((id) => lookup.get(id)).filter((item): item is ClosetItem => Boolean(item));
+  const more = pieces.length > max ? `<span class="thumb-more">+${pieces.length - max}</span>` : "";
+  return `<span class="thumb-strip">${pieces.slice(0, max).map((item) => thumbHtml(item)).join("")}${more}</span>`;
+}
+
+function renderHeroToday() {
+  const sub = $("#heroSub");
+  if (!items.length) {
+    sub.textContent = "Everything you own, easy to find.";
+    return;
+  }
+  const lookup = itemLookup();
+  const names = [...new Set(todayLogs().flatMap((log) => log.itemIds))].map((id) => lookup.get(id)?.name).filter(Boolean) as string[];
+  sub.innerHTML = names.length
+    ? `Today: ${escapeHtml(names.slice(0, 3).join(", "))}${names.length > 3 ? ` +${names.length - 3}` : ""}`
+    : `Nothing logged today. <button class="text-button" type="button" data-open-picker="log">Log what you’re wearing</button>`;
+}
+
+function renderWearCard(item: ClosetItem) {
+  const stats = wearIndex().get(item.id);
+  const count = stats?.count ?? 0;
+  $("#wearCount").textContent = String(count);
+  $("#wearLast").textContent = stats?.last ? formatDay(stats.last) : "—";
+  $("#wearCost").textContent = item.price !== undefined && count ? (item.price / count).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—";
+  const wornToday = todayLogs().some((log) => log.itemIds.includes(item.id));
+  const button = $<HTMLButtonElement>("#woreTodayButton");
+  button.disabled = wornToday;
+  button.textContent = wornToday ? "Worn today" : "Wore it today";
+  const inOutfits = outfits.filter((outfit) => outfit.itemIds.includes(item.id)).map((outfit) => outfit.name);
+  const note = $("#detailOutfits");
+  note.hidden = !inOutfits.length;
+  note.textContent = inOutfits.length ? `In ${inOutfits.length === 1 ? "outfit" : "outfits"}: ${inOutfits.join(", ")}` : "";
+}
+
+function renderOutfits() {
+  const lookup = itemLookup();
+  const sorted = [...outfits].sort((a, b) => b.updatedAt - a.updatedAt);
+  $("#outfitCount").textContent = String(sorted.length);
+  $("#outfitsEmpty").hidden = sorted.length > 0;
+  $("#outfitGrid").innerHTML = sorted.map((outfit) => {
+    const pieces = outfit.itemIds.map((id) => lookup.get(id)).filter((item): item is ClosetItem => Boolean(item));
+    const shown = pieces.slice(0, 4);
+    const timesWorn = new Set(wearLogs.filter((log) => log.outfitId === outfit.id).map((log) => log.wornOn)).size;
+    const cells = shown.length ? shown.map((item) => thumbHtml(item, "collage-cell")).join("") : `<span class="collage-cell">${icons.hanger}</span>`;
+    return `<button class="outfit-card" type="button" data-outfit="${escapeHtml(outfit.id)}">
+      <span class="collage is-${Math.max(1, shown.length)}">${cells}</span>
+      <span class="outfit-name">${escapeHtml(outfit.name)}</span>
+      <span class="outfit-meta">${plural(pieces.length, "piece")} · ${timesWorn ? `Worn ${plural(timesWorn, "time")}` : "Not worn yet"}</span>
+    </button>`;
+  }).join("");
+}
+
+function renderWorn() {
+  const today = todayLogs();
+  const todayIds = [...new Set(today.flatMap((log) => log.itemIds))];
+  $("#todayCard").innerHTML = !items.length
+    ? `<div class="today-head"><span class="today-mascot">${icons.hangie}</span><div><p class="eyebrow">Today</p><h2 class="hero-title">Add a few pieces first</h2></div></div>
+       <button class="btn btn-primary" type="button" data-add-piece>Add a piece</button>`
+    : today.length
+      ? `<div class="today-head"><div><p class="eyebrow">Today</p><h2 class="hero-title">You’re wearing</h2></div></div>
+         ${thumbStrip(todayIds, 6)}
+         <div class="today-actions"><button class="btn btn-secondary" type="button" data-edit-log="${escapeHtml(today[0].id)}">Edit</button><button class="btn btn-secondary" type="button" data-open-picker="log">Add more</button></div>`
+      : `<div class="today-head"><span class="today-mascot">${icons.hangie}</span><div><p class="eyebrow">Today</p><h2 class="hero-title">What are you wearing?</h2></div></div>
+         <button class="btn btn-primary" type="button" data-open-picker="log">Log today’s outfit</button>`;
+
+  const sorted = [...wearLogs].sort((a, b) => b.wornOn.localeCompare(a.wornOn) || b.createdAt - a.createdAt);
+  $("#wornCount").textContent = String(sorted.length);
+  $("#wornEmpty").hidden = sorted.length > 0;
+  let month = "";
+  $("#wornList").innerHTML = sorted.map((log) => {
+    const date = dateFromKey(log.wornOn);
+    const monthKey = log.wornOn.slice(0, 7);
+    const header = monthKey === month ? "" : `<h3 class="month-label">${date.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>`;
+    month = monthKey;
+    const outfit = outfits.find((entry) => entry.id === log.outfitId);
+    const label = outfit?.name ?? plural(log.itemIds.length, "piece");
+    return `${header}<button class="worn-row" type="button" data-log="${escapeHtml(log.id)}">
+      <span class="worn-date"><b>${date.getDate()}</b><small>${date.toLocaleDateString(undefined, { weekday: "short" })}</small></span>
+      <span class="worn-body"><span class="worn-name">${escapeHtml(label)}</span>${thumbStrip(log.itemIds, 5)}</span>
+    </button>`;
+  }).join("");
+}
+
+function openPicker(mode: PickerMode) {
+  if (addMenu.open) addMenu.close();
+  picker = mode;
+  pickerCategory = "all";
+  const isOutfit = mode.kind === "outfit";
+  const existing = isOutfit ? mode.outfit : mode.log;
+  pickerSelected = new Set(isOutfit ? mode.outfit?.itemIds ?? [] : mode.log?.itemIds ?? mode.itemIds ?? []);
+  $("#outfitNameField").hidden = !isOutfit;
+  $("#wornOnField").hidden = isOutfit;
+  outfitNameInput.value = isOutfit ? mode.outfit?.name ?? "" : "";
+  wornOnInput.value = !isOutfit && mode.log ? mode.log.wornOn : dayKey();
+  wornOnInput.max = dayKey();
+  $("#pickerEyebrow").textContent = isOutfit ? (existing ? "Edit outfit" : "New outfit") : existing ? "Edit log" : "Log what you wore";
+  $("#pickerTitle").textContent = isOutfit ? (mode.outfit ? mode.outfit.name : "Put an outfit together") : "What did you wear?";
+  $("#pickerSave").textContent = existing ? "Save" : isOutfit ? "Create outfit" : "Log it";
+  $("#pickerDelete").hidden = !existing;
+  $("#pickerWearToday").hidden = !(isOutfit && existing);
+  const shortcuts = $("#pickerOutfits");
+  shortcuts.hidden = isOutfit || !outfits.length;
+  shortcuts.innerHTML = isOutfit ? "" : outfits.map((outfit) => `<button class="chip" type="button" data-use-outfit="${escapeHtml(outfit.id)}">${icons.layers}${escapeHtml(outfit.name)}</button>`).join("");
+  showError($("#pickerError"));
+  renderPicker();
+  pickerDialog.showModal();
+}
+
+function showError(element: HTMLElement, message?: string) {
+  element.hidden = !message;
+  element.textContent = message ?? "";
+}
+
+function renderPicker() {
+  const used = categories.filter((name) => items.some((item) => item.category === name));
+  $("#pickerFilters").innerHTML = ["all", ...used]
+    .map((name) => `<button class="chip${name === pickerCategory ? " is-on" : ""}" type="button" data-picker-category="${escapeHtml(name)}">${name === "all" ? "All" : escapeHtml(name)}</button>`)
+    .join("");
+  const shown = items
+    .filter((item) => pickerCategory === "all" || item.category === pickerCategory)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  $("#pickerGrid").innerHTML = shown.length
+    ? shown.map((item) => {
+        const on = pickerSelected.has(item.id);
+        return `<button class="pick" type="button" data-pick="${escapeHtml(item.id)}" aria-pressed="${on}">${thumbHtml(item, "mini-thumb")}<span class="pick-check">${icons.check}</span><span class="mini-name">${escapeHtml(item.name)}</span></button>`;
+      }).join("")
+    : `<p class="picker-empty">${items.length ? "Nothing in this collection yet." : "Add some pieces to your closet first."}</p>`;
+  const count = [...pickerSelected].filter((id) => items.some((item) => item.id === id)).length;
+  $("#pickerCount").textContent = count ? `${plural(count, "piece")} selected` : "Pick the pieces";
+}
+
+function selectedIds() {
+  return [...pickerSelected].filter((id) => items.some((item) => item.id === id));
+}
+
+function savePicker() {
+  const ids = selectedIds();
+  if (!ids.length) {
+    showError($("#pickerError"), "Pick at least one piece.");
+    return;
+  }
+  const now = Date.now();
+  if (picker.kind === "outfit") {
+    const existing = picker.outfit;
+    const name = outfitNameInput.value.trim() || existing?.name || `Outfit ${outfits.length + 1}`;
+    const outfit: Outfit = existing
+      ? { ...existing, name, itemIds: ids, updatedAt: now, dirty: true }
+      : { id: newId(), name, itemIds: ids, createdAt: now, updatedAt: now, dirty: true };
+    outfits = [outfit, ...outfits.filter((entry) => entry.id !== outfit.id)];
+    pickerDialog.close();
+    render();
+    showToast({ title: existing ? "Outfit saved" : "Outfit created", message: `${name} · ${plural(ids.length, "piece")}` });
+    void persistAndSync(saveRecord("outfits", outfit));
+    return;
+  }
+  const wornOn = wornOnInput.value || dayKey();
+  if (wornOn > dayKey()) {
+    showError($("#pickerError"), "Pick today or an earlier day.");
+    return;
+  }
+  const existing = picker.log;
+  // Remember which outfit this was when the pieces match one exactly.
+  const outfitId = outfits.find((outfit) => sameSet(outfit.itemIds, ids))?.id;
+  const log: WearLog = existing
+    ? { ...existing, wornOn, itemIds: ids, outfitId, updatedAt: now, dirty: true }
+    : { id: newId(), wornOn, itemIds: ids, outfitId, createdAt: now, updatedAt: now, dirty: true };
+  saveLog(log, wornOn === dayKey() ? `Today: ${plural(ids.length, "piece")}.` : `${formatDay(wornOn)}: ${plural(ids.length, "piece")}.`);
+}
+
+function saveLog(log: WearLog, message: string) {
+  const tasksDoneBefore = allTasksDone();
+  wearLogs = [log, ...wearLogs.filter((entry) => entry.id !== log.id)];
+  if (pickerDialog.open) pickerDialog.close();
+  render();
+  celebrate(tasksDoneBefore, { title: "Logged", message });
+  void persistAndSync(saveRecord("wearLogs", log));
+}
+
+function logOutfitToday(outfit: Outfit) {
+  const now = Date.now();
+  const itemIds = outfit.itemIds.filter((id) => items.some((item) => item.id === id));
+  saveLog({ id: newId(), wornOn: dayKey(), itemIds, outfitId: outfit.id, createdAt: now, updatedAt: now, dirty: true }, `${outfit.name} is logged for today.`);
+}
+
+// "Wore it today" on a piece joins today's latest log rather than starting a new one.
+function addPieceToToday(item: ClosetItem) {
+  const now = Date.now();
+  const latest = todayLogs().sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (latest?.itemIds.includes(item.id)) return;
+  const itemIds = latest ? [...latest.itemIds, item.id] : [item.id];
+  // An outfit plus an extra layer still counts as wearing that outfit.
+  const outfitId = latest?.outfitId ?? outfits.find((outfit) => sameSet(outfit.itemIds, itemIds))?.id;
+  const log: WearLog = latest
+    ? { ...latest, itemIds, outfitId, updatedAt: now, dirty: true }
+    : { id: newId(), wornOn: dayKey(), itemIds, outfitId, createdAt: now, updatedAt: now, dirty: true };
+  saveLog(log, `${item.name} is logged for today.`);
+}
+
+function deletePickerRecord() {
+  const now = Date.now();
+  pickerDialog.close();
+  if (picker.kind === "outfit" && picker.outfit) {
+    const outfit = picker.outfit;
+    outfits = outfits.filter((entry) => entry.id !== outfit.id);
+    render();
+    void persistAndSync(isSignedIn() ? saveRecord("outfits", { ...outfit, deletedAt: now, updatedAt: now, dirty: true }) : removeRecord("outfits", outfit.id));
+    showToast({ kind: "info", title: "Outfit deleted", message: `${outfit.name} was removed. Your wear history keeps its pieces.`, action: { label: "Undo", run: () => {
+      const restored = { ...outfit, updatedAt: Date.now(), dirty: true };
+      outfits = [restored, ...outfits];
+      render();
+      void persistAndSync(saveRecord("outfits", restored));
+    } } });
+  } else if (picker.kind === "log" && picker.log) {
+    const log = picker.log;
+    wearLogs = wearLogs.filter((entry) => entry.id !== log.id);
+    render();
+    void persistAndSync(isSignedIn() ? saveRecord("wearLogs", { ...log, deletedAt: now, updatedAt: now, dirty: true }) : removeRecord("wearLogs", log.id));
+    showToast({ kind: "info", title: "Log deleted", message: `${formatDay(log.wornOn)} was removed.`, action: { label: "Undo", run: () => {
+      const restored = { ...log, updatedAt: Date.now(), dirty: true };
+      wearLogs = [restored, ...wearLogs];
+      render();
+      void persistAndSync(saveRecord("wearLogs", restored));
+    } } });
+  }
+}
+
 /* ---------- Events ---------- */
 
 window.addEventListener("hashchange", () => applyHash(location.hash));
@@ -719,7 +1042,77 @@ $(".tabbar").addEventListener("click", (event) => {
   window.scrollTo({ top: 0 });
 });
 
-$("#addFab").addEventListener("click", () => openItemDialog());
+$("#addFab").addEventListener("click", () => addMenu.showModal());
+addMenu.addEventListener("click", (event) => {
+  const target = event.target as Element;
+  if (event.target === addMenu || target.closest("[data-close-menu]")) {
+    addMenu.close();
+    return;
+  }
+  const option = target.closest<HTMLElement>("[data-add]");
+  if (!option) return;
+  addMenu.close();
+  if (option.dataset.add === "piece") openItemDialog();
+  else openPicker({ kind: option.dataset.add === "log" ? "log" : "outfit" });
+});
+
+// Buttons rendered in several places: hero, empty states, today card, rediscover.
+document.addEventListener("click", (event) => {
+  const target = event.target as Element;
+  const openPickerButton = target.closest<HTMLElement>("[data-open-picker]");
+  if (openPickerButton) openPicker({ kind: openPickerButton.dataset.openPicker === "log" ? "log" : "outfit" });
+  else if (target.closest("[data-add-piece]")) openItemDialog();
+  else {
+    const piece = target.closest<HTMLElement>("[data-open-item]");
+    if (piece?.dataset.openItem) openDetail(piece.dataset.openItem);
+  }
+});
+
+$("#newOutfitButton").addEventListener("click", () => openPicker({ kind: "outfit" }));
+$("#outfitGrid").addEventListener("click", (event) => {
+  const card = (event.target as Element).closest<HTMLElement>("[data-outfit]");
+  const outfit = outfits.find((entry) => entry.id === card?.dataset.outfit);
+  if (outfit) openPicker({ kind: "outfit", outfit });
+});
+$("#wornScreen").addEventListener("click", (event) => {
+  const row = (event.target as Element).closest<HTMLElement>("[data-log], [data-edit-log]");
+  const log = wearLogs.find((entry) => entry.id === (row?.dataset.log ?? row?.dataset.editLog));
+  if (log) openPicker({ kind: "log", log });
+});
+
+pickerDialog.addEventListener("click", (event) => {
+  const target = event.target as Element;
+  if (event.target === pickerDialog || target.closest("[data-close-picker]")) {
+    pickerDialog.close();
+    return;
+  }
+  const pick = target.closest<HTMLElement>("[data-pick]");
+  const filter = target.closest<HTMLElement>("[data-picker-category]");
+  const useOutfit = target.closest<HTMLElement>("[data-use-outfit]");
+  if (pick?.dataset.pick) {
+    const id = pick.dataset.pick;
+    if (pickerSelected.has(id)) pickerSelected.delete(id);
+    else pickerSelected.add(id);
+    showError($("#pickerError"));
+    renderPicker();
+  } else if (filter) {
+    pickerCategory = filter.dataset.pickerCategory ?? "all";
+    renderPicker();
+  } else if (useOutfit) {
+    const outfit = outfits.find((entry) => entry.id === useOutfit.dataset.useOutfit);
+    if (outfit) pickerSelected = new Set(outfit.itemIds);
+    renderPicker();
+  } else if (target.closest("#pickerDelete")) {
+    deletePickerRecord();
+  } else if (target.closest("#pickerWearToday") && picker.kind === "outfit" && picker.outfit) {
+    pickerDialog.close();
+    logOutfitToday(picker.outfit);
+  }
+});
+$<HTMLFormElement>("#pickerForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  savePicker();
+});
 $("#taskList").addEventListener("click", (event) => {
   const task = (event.target as Element).closest<HTMLElement>("[data-task]");
   if (task) startTask(task.dataset.task as TaskKind);
@@ -750,6 +1143,7 @@ $("#itemScreen").addEventListener("click", (event) => {
   const target = event.target as Element;
   if (target.closest("#detailBack")) closeDetail();
   else if (target.closest("#detailEdit")) openItemDialog(item);
+  else if (target.closest("#woreTodayButton")) addPieceToToday(item);
   else if (target.closest("#detailFavorite")) {
     item.favorite = !item.favorite;
     Object.assign(item, { updatedAt: Date.now(), dirty: true });
@@ -762,8 +1156,18 @@ $("#itemScreen").addEventListener("click", (event) => {
 });
 
 $("#categoryFilters").addEventListener("click", (event) => {
+  const view = (event.target as Element).closest<HTMLButtonElement>("[data-view]");
+  if (view) {
+    // Tapping the active view again goes back to the whole closet.
+    location.hash = tab === view.dataset.view ? "#closet" : `#${view.dataset.view}`;
+    return;
+  }
   const chip = (event.target as Element).closest<HTMLButtonElement>("[data-category]");
   if (!chip) return;
+  if (chip.dataset.category === "all" && tab !== "closet") {
+    location.hash = "#closet";
+    return;
+  }
   activeCategory = chip.dataset.category ?? "all";
   if (tab === "closet") history.replaceState(null, "", activeCategory === "all" ? "#closet" : collectionHash(activeCategory));
   render();
@@ -876,13 +1280,17 @@ async function init() {
 }
 
 async function loadState() {
-  const [storedItems, storedCollections, legacyNames, storedLog] = await Promise.all([
+  const [storedItems, storedCollections, legacyNames, storedLog, storedOutfits, storedLogs] = await Promise.all([
     loadItems(),
     loadMeta<Collection[]>("collections"),
     loadMeta<string[]>("categories"),
-    loadMeta<TaskLog>("taskLog")
+    loadMeta<TaskLog>("taskLog"),
+    loadRecords("outfits"),
+    loadRecords("wearLogs")
   ]);
   items = storedItems.filter((item) => !item.deletedAt);
+  outfits = storedOutfits.filter((outfit) => !outfit.deletedAt);
+  wearLogs = storedLogs.filter((log) => !log.deletedAt);
   if (storedCollections) {
     collections = storedCollections;
   } else {

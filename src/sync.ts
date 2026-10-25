@@ -1,16 +1,18 @@
 // Local-first sync with Supabase (docs/phase-3-plan.md).
 // IndexedDB stays the source of truth on the device; this module pulls the cloud's changes,
 // then pushes local ones. Conflicts resolve by the newest updated_at (last write wins).
-import type { Session } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 import { blobToDataUrl, dataUrlToBlob, recompressDataUrl } from "./photos";
-import { clearAll, getItem, loadItems, loadMeta, removeItem, saveItem, saveMeta } from "./storage";
+import { clearAll, getItem, getRecord, loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord, type RecordStore } from "./storage";
 import { PHOTO_BUCKET, supabase } from "./supabase";
-import { UNKNOWN, type ClosetItem, type Collection, type Occasion, type Weather } from "./types";
+import { UNKNOWN, type ClosetItem, type Collection, type Occasion, type Outfit, type WearLog, type Weather } from "./types";
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 type ItemInsert = Database["public"]["Tables"]["items"]["Insert"];
 type CollectionRow = Database["public"]["Tables"]["collections"]["Row"];
+type OutfitRow = Database["public"]["Tables"]["outfits"]["Row"];
+type WearLogRow = Database["public"]["Tables"]["wear_logs"]["Row"];
 
 export type SyncState = "off" | "signed-out" | "syncing" | "synced" | "offline" | "error";
 
@@ -33,6 +35,8 @@ interface SyncMeta {
   userId?: string;
   items?: Cursor;
   collections?: Cursor;
+  outfits?: Cursor;
+  wearLogs?: Cursor;
   lastSyncedAt?: number;
 }
 
@@ -187,8 +191,12 @@ async function runOnce() {
   try {
     await pullCollections();
     await pullItems();
+    await pullRecords(OUTFITS);
+    await pullRecords(WEAR_LOGS);
     await pushCollections();
     await pushItems();
+    await pushRecords(OUTFITS);
+    await pushRecords(WEAR_LOGS);
     meta.lastSyncedAt = Date.now();
     await saveMeta("sync", meta);
     setStatus({ state: "synced", lastSyncedAt: meta.lastSyncedAt, pending: await countPending() });
@@ -214,8 +222,9 @@ function isNetworkError(error: unknown) {
 const needsPush = (item: ClosetItem) => item.dirty !== false && !item.sample;
 
 async function countPending() {
-  const [items, collections] = await Promise.all([loadItems(), loadMeta<Collection[]>("collections")]);
-  return items.filter(needsPush).length + (collections ?? []).filter((collection) => collection.dirty !== false).length;
+  const [items, collections, outfits, wearLogs] = await Promise.all([loadItems(), loadMeta<Collection[]>("collections"), loadRecords("outfits"), loadRecords("wearLogs")]);
+  const unsent = (records: { dirty?: boolean }[]) => records.filter((record) => record.dirty !== false).length;
+  return items.filter(needsPush).length + unsent(collections ?? []) + unsent(outfits) + unsent(wearLogs);
 }
 
 // Keyset pagination on (synced_at, id) so rows sharing a timestamp are never skipped between pages.
@@ -495,4 +504,125 @@ async function pushCollections() {
     .map((collection) => (sent.get(collection.id) === collection.updatedAt ? { ...collection, dirty: false } : collection));
   await saveMeta("collections", cleaned);
   dataChanged = true;
+}
+
+/* ---------- Outfits and wear logs ---------- */
+
+interface RecordSpec<S extends RecordStore, L extends Outfit | WearLog, R> {
+  store: S;
+  table: "outfits" | "wear_logs";
+  fromRow: (row: R) => L;
+  toRow: (record: L) => Record<string, unknown>;
+}
+
+const iso = (time: number) => new Date(time).toISOString();
+
+const OUTFITS: RecordSpec<"outfits", Outfit, OutfitRow> = {
+  store: "outfits",
+  table: "outfits",
+  fromRow: (row) => ({
+    id: row.id,
+    name: row.name,
+    itemIds: row.item_ids,
+    createdAt: Date.parse(row.created_at),
+    updatedAt: Date.parse(row.updated_at),
+    dirty: false,
+    remoteSyncedAt: row.synced_at
+  }),
+  toRow: (outfit) => ({
+    id: outfit.id,
+    user_id: userId(),
+    name: outfit.name,
+    item_ids: outfit.itemIds,
+    created_at: iso(outfit.createdAt),
+    updated_at: iso(outfit.updatedAt),
+    deleted_at: outfit.deletedAt ? iso(outfit.deletedAt) : null
+  })
+};
+
+const WEAR_LOGS: RecordSpec<"wearLogs", WearLog, WearLogRow> = {
+  store: "wearLogs",
+  table: "wear_logs",
+  fromRow: (row) => ({
+    id: row.id,
+    wornOn: row.worn_on,
+    itemIds: row.item_ids,
+    outfitId: row.outfit_id ?? undefined,
+    createdAt: Date.parse(row.created_at),
+    updatedAt: Date.parse(row.updated_at),
+    dirty: false,
+    remoteSyncedAt: row.synced_at
+  }),
+  toRow: (log) => ({
+    id: log.id,
+    user_id: userId(),
+    worn_on: log.wornOn,
+    item_ids: log.itemIds,
+    outfit_id: log.outfitId ?? null,
+    created_at: iso(log.createdAt),
+    updated_at: iso(log.updatedAt),
+    deleted_at: log.deletedAt ? iso(log.deletedAt) : null
+  })
+};
+
+// The generated types can't follow a table name chosen at runtime, so these two tables go through an untyped view.
+const looseClient = () => client() as unknown as SupabaseClient;
+
+interface SyncedRow {
+  id: string;
+  synced_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+async function pullRecords<S extends RecordStore, L extends Outfit | WearLog, R>(spec: RecordSpec<S, L, R>) {
+  let page = overlapStart(meta[spec.store]);
+  for (;;) {
+    let query = looseClient().from(spec.table).select("*").eq("user_id", userId()).order("synced_at").order("id").limit(PAGE_SIZE);
+    if (page) query = query.or(afterCursor(page));
+    const { data, error } = await query;
+    if (error) throw error;
+    const rows = (data ?? []) as (SyncedRow & R)[];
+    for (const row of rows) {
+      const local = await getRecord(spec.store, row.id);
+      if (local?.remoteSyncedAt === row.synced_at) continue;
+      if (local && local.dirty !== false && local.updatedAt > Date.parse(row.updated_at)) continue;
+      if (row.deleted_at) {
+        if (local) {
+          await removeRecord(spec.store, row.id);
+          dataChanged = true;
+        }
+        continue;
+      }
+      await saveRecord(spec.store, spec.fromRow(row) as never);
+      dataChanged = true;
+    }
+    if (rows.length) {
+      const last = rows[rows.length - 1];
+      page = { at: last.synced_at, id: last.id };
+      const saved = meta[spec.store];
+      if (!saved || last.synced_at > saved.at) meta[spec.store] = page;
+      await saveMeta("sync", meta);
+    }
+    if (rows.length < PAGE_SIZE) return;
+  }
+}
+
+async function pushRecords<S extends RecordStore, L extends Outfit | WearLog, R>(spec: RecordSpec<S, L, R>) {
+  const pending = ((await loadRecords(spec.store)) as L[]).filter((record) => record.dirty !== false);
+  for (let start = 0; start < pending.length; start += PUSH_BATCH) {
+    const batch = pending.slice(start, start + PUSH_BATCH);
+    const { data, error } = await looseClient().from(spec.table).upsert(batch.map(spec.toRow)).select("id, synced_at");
+    if (error) throw error;
+    const syncedAt = new Map((data as { id: string; synced_at: string }[]).map((row) => [row.id, row.synced_at]));
+    for (const sent of batch) {
+      const current = await getRecord(spec.store, sent.id);
+      if (!current) continue;
+      // Edited again while uploading: keep it marked so the next pass sends the newer version.
+      const unchanged = current.updatedAt === sent.updatedAt;
+      if (sent.deletedAt && unchanged) await removeRecord(spec.store, sent.id);
+      else await saveRecord(spec.store, { ...current, dirty: !unchanged, remoteSyncedAt: unchanged ? syncedAt.get(sent.id) : current.remoteSyncedAt } as never);
+      dataChanged = true;
+    }
+  }
 }

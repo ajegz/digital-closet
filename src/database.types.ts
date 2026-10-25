@@ -112,6 +112,75 @@ export type Database = {
         };
         Relationships: [];
       };
+      outfits: {
+        Row: {
+          created_at: string;
+          deleted_at: string | null;
+          id: string;
+          item_ids: string[];
+          name: string;
+          synced_at: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at: string;
+          deleted_at?: string | null;
+          id: string;
+          item_ids?: string[];
+          name: string;
+          synced_at?: string;
+          updated_at: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          item_ids?: string[];
+          name?: string;
+          synced_at?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      wear_logs: {
+        Row: {
+          created_at: string;
+          deleted_at: string | null;
+          id: string;
+          item_ids: string[];
+          outfit_id: string | null;
+          synced_at: string;
+          updated_at: string;
+          user_id: string;
+          worn_on: string;
+        };
+        Insert: {
+          created_at: string;
+          deleted_at?: string | null;
+          id: string;
+          item_ids?: string[];
+          outfit_id?: string | null;
+          synced_at?: string;
+          updated_at: string;
+          user_id?: string;
+          worn_on: string;
+        };
+        Update: {
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          item_ids?: string[];
+          outfit_id?: string | null;
+          synced_at?: string;
+          updated_at?: string;
+          user_id?: string;
+          worn_on?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };
