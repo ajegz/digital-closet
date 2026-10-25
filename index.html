@@ -87,7 +87,7 @@
             </div>
 
             <div class="catalog-head">
-              <h2 class="section-title"><span id="viewTitle">All items</span> <span class="count-pill" id="visibleCount">0</span></h2>
+              <h2 class="section-title"><span id="viewTitle">All items</span> <span class="count-pill" id="visibleCount" aria-live="polite" aria-atomic="true">0</span></h2>
               <div class="view-toggle" role="group" aria-label="Layout">
                 <button class="view-button is-on" type="button" data-layout="grid" aria-label="Grid" aria-pressed="true"><span data-icon="grid"></span></button>
                 <button class="view-button" type="button" data-layout="list" aria-label="List" aria-pressed="false"><span data-icon="list"></span></button>
@@ -100,10 +100,21 @@
             </div>
 
             <div class="chip-scroller" id="categoryFilters" role="group" aria-label="Filter by collection"></div>
-            <div class="filter-row" id="filterRow" role="group" aria-label="Filter by status" hidden>
-              <button class="chip is-on" data-status="all" type="button">Any status</button>
-              <button class="chip" data-status="Needs review" type="button">Needs review</button>
-              <button class="chip" data-status="Confirmed" type="button">Confirmed</button>
+            <div class="filter-row" id="filterRow" role="group" aria-label="Closet filters" hidden>
+              <div class="filter-fields">
+                <label class="field" for="clothingTypeFilter">Clothing type<select id="clothingTypeFilter" aria-describedby="clothingTypeHint"><option value="all">All clothing types</option></select></label>
+                <label class="field" for="brandFilter">Brand<select id="brandFilter"><option value="all">All brands</option></select></label>
+              </div>
+              <p class="filter-hint" id="clothingTypeHint">Clothing types use your piece names. Edit a name to refine its match.</p>
+              <div class="status-filters" role="group" aria-label="Filter by status">
+                <button class="chip is-on" data-status="all" type="button" aria-pressed="true">Any status</button>
+                <button class="chip" data-status="Needs review" type="button" aria-pressed="false">Needs review</button>
+                <button class="chip" data-status="Confirmed" type="button" aria-pressed="false">Confirmed</button>
+              </div>
+            </div>
+            <div class="filter-summary" id="filterSummary" hidden>
+              <p id="activeFilterText"></p>
+              <button class="chip" id="clearFilters" type="button">Clear filters</button>
             </div>
 
             <div class="item-grid" id="itemGrid"></div>

@@ -200,7 +200,16 @@ button.task:active { transform: translateY(1px); }
 .chip-scroller { display: flex; gap: 8px; overflow-x: auto; margin: 0 calc(var(--gutter) * -1); padding: 2px var(--gutter) 4px; scroll-snap-type: x proximity; scrollbar-width: none; }
 .chip-scroller::-webkit-scrollbar { display: none; }
 .chip-scroller .chip { scroll-snap-align: start; }
-.filter-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-row { display: grid; gap: 12px; padding: 14px; background: var(--bg); border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); }
+.filter-fields { display: grid; gap: 12px; }
+.filter-fields .field { min-width: 0; }
+.status-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-hint, .filter-summary p { color: var(--muted); font-size: 14px; }
+.filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.filter-summary p { min-width: 0; overflow-wrap: anywhere; }
+.filter-summary button { flex-shrink: 0; }
+#filterButton.is-on { background: var(--sky-tint); border-color: var(--sky-line); color: var(--sky-text); }
+@media (min-width: 480px) { .filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .item-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .item-card { position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); cursor: pointer; transition: transform .1s; }

@@ -10,7 +10,7 @@ Read this first. It describes what exists, how it fits together, the rules this 
 
 A mobile-first, installable web app for cataloguing a personal wardrobe:
 
-- **Closet:** pieces with photo, name, collection (category), brand, colour, size, material, price, purchase date, store, weather, occasions, care notes, and a status (Needs review / Confirmed). Search, collection chips, Favorites and New quick views, grid/list layouts.
+- **Closet:** pieces with photo, name, collection (category), brand, colour, size, material, price, purchase date, store, weather, occasions, care notes, and a status (Needs review / Confirmed). Search, collection chips, clothing type/brand/status filters, Favorites and New quick views, grid/list layouts. Clothing types are inferred locally from piece names; sleeve and zip styles can overlap garment shapes. Brand choices ignore casing and extra whitespace, while keeping subbrands separate.
 - **Outfits:** saved combinations of pieces, shown as photo collages.
 - **Worn:** a log of what was worn on each day (from an outfit or picked pieces). It drives the wear stats: times worn, last worn, cost per wear, most worn, and "not worn in 90 days". A Rediscover strip surfaces unworn pieces.
 - **Today's tasks:** up to 3 practical tasks built from what the closet is missing (log today's outfit, add a photo, confirm pieces, add pieces, fill details).
@@ -53,6 +53,7 @@ The publishable key is public by design (Row Level Security protects data). The 
 | `src/sync.ts` | Local-first sync engine: pull then push, last-write-wins on `updated_at`, keyset cursors, photo upload/download, tombstones, auth (send/verify code, sign out) |
 | `src/storage.ts` | IndexedDB wrapper (`loadItems`, `saveItem`, `loadRecords`/`saveRecord` for outfits and wear logs, `loadMeta`/`saveMeta`, `clearAll`) |
 | `src/types.ts` | `ClosetItem`, `Outfit`, `WearLog`, `Collection`, enums (`WEATHER`, `OCCASIONS`), `UNKNOWN` placeholder |
+| `src/item-filters.ts` | Name-based clothing type suggestions and normalized brand filter keys; these do not change saved item details |
 | `src/photos.ts` | Upload-time compression: EXIF-rotated, WebP (JPEG fallback), 1600px detail + 480px thumbnail; data-URL/Blob helpers |
 | `src/account.ts` | Account sheet: email → code → signed-in view with sync status and sign-out |
 | `src/device.ts` | Theme preference, install prompt, service worker registration |

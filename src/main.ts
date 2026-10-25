@@ -4,6 +4,7 @@ import { processPhoto } from "./photos";
 import { initAccount } from "./account";
 import { initDevice } from "./device";
 import { initChatImport } from "./import-ui";
+import { brandKey, CLOTHING_TYPES, clothingTypes } from "./item-filters";
 import { loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord } from "./storage";
 import { isSignedIn, requestSync, startSync } from "./sync";
 import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Outfit, type Status, type WearLog, type Weather } from "./types";
@@ -63,6 +64,8 @@ let taskLog: TaskLog = emptyTaskLog("");
 let tab: Tab = "closet";
 let activeCategory = "all";
 let activeStatus = "all";
+let activeClothingType = "all";
+let activeBrand = "all";
 let layout: "grid" | "list" = "grid";
 let viewingItemId: string | null = null;
 // Set when a card opens the detail screen, so Back returns to the same list and scroll position.
@@ -261,7 +264,6 @@ function startTask(kind: TaskKind) {
     if (item) openDetail(item.id);
   } else {
     activeStatus = "Needs review";
-    document.querySelectorAll<HTMLElement>("[data-status]").forEach((chip) => chip.classList.toggle("is-on", chip.dataset.status === activeStatus));
     $("#filterRow").hidden = false;
     $("#filterButton").setAttribute("aria-expanded", "true");
     render();
@@ -326,7 +328,9 @@ function visibleItems() {
       const matchesText = [item.name, item.category, item.brand, item.color, item.material, item.store].join(" ").toLowerCase().includes(query);
       const matchesCategory = activeCategory === "all" || item.category === activeCategory;
       const matchesStatus = activeStatus === "all" || item.status === activeStatus;
-      return matchesText && matchesCategory && matchesStatus;
+      const matchesType = activeClothingType === "all" || clothingTypes(item.name).some((type) => type === activeClothingType);
+      const matchesBrand = activeBrand === "all" || itemBrandKey(item) === activeBrand;
+      return matchesText && matchesCategory && matchesStatus && matchesType && matchesBrand;
     })
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -351,7 +355,7 @@ function cardHtml(item: ClosetItem) {
 }
 
 function emptyState(): { title: string; text: string; action: EmptyAction } {
-  if (searchInput.value.trim() || activeStatus !== "all") return { title: "No pieces match", text: "Try another search or clear the filters.", action: "reset" };
+  if (searchInput.value.trim() || activeStatus !== "all" || activeClothingType !== "all" || activeBrand !== "all") return { title: "No pieces match", text: "Try another search or clear the filters.", action: "reset" };
   if (tab === "favorites") return { title: "No favorites yet", text: "Tap the heart on any piece to keep it here.", action: "closet" };
   if (tab === "recent") return { title: "Nothing new lately", text: `Pieces you add show up here for ${RECENT_DAYS} days.`, action: "add" };
   if (activeCategory !== "all") return { title: `${activeCategory} is empty`, text: `Add a piece and file it under ${activeCategory}.`, action: "add" };
@@ -385,7 +389,55 @@ function render() {
   else renderCatalog();
 }
 
+function itemBrandKey(item: ClosetItem) {
+  return known(item.brand.trim()) ? brandKey(item.brand) : "unknown";
+}
+
+function renderFilters() {
+  const typeSelect = $<HTMLSelectElement>("#clothingTypeFilter");
+  const typeOptions = '<option value="all">All clothing types</option>' + CLOTHING_TYPES.map((type) => `<option value="${type}">${type}</option>`).join("");
+  if (typeSelect.innerHTML !== typeOptions) typeSelect.innerHTML = typeOptions;
+  typeSelect.value = activeClothingType;
+
+  const brands = new Map<string, string>();
+  for (const item of items.length ? items : sampleItems) {
+    const key = itemBrandKey(item);
+    if (!brands.has(key)) brands.set(key, key === "unknown" ? "Brand not set" : item.brand.trim().replace(/\s+/g, " "));
+  }
+  // Keep a selected brand available if its last piece is edited or deleted.
+  const brandSelect = $<HTMLSelectElement>("#brandFilter");
+  if (activeBrand !== "all" && !brands.has(activeBrand)) brands.set(activeBrand, brandSelect.selectedOptions[0]?.textContent ?? "Brand not set");
+  const brandOptions = '<option value="all">All brands</option>' + [...brands].sort((a, b) => a[1].localeCompare(b[1])).map(([key, name]) => `<option value="${escapeHtml(key)}">${escapeHtml(name)}</option>`).join("");
+  if (brandSelect.innerHTML !== brandOptions) brandSelect.innerHTML = brandOptions;
+  brandSelect.value = activeBrand;
+  document.querySelectorAll<HTMLElement>("[data-status]").forEach((chip) => {
+    const selected = chip.dataset.status === activeStatus;
+    chip.classList.toggle("is-on", selected);
+    chip.setAttribute("aria-pressed", String(selected));
+  });
+  const labels = [
+    activeCategory !== "all" ? activeCategory : "",
+    searchInput.value.trim() ? `Search: ${searchInput.value.trim()}` : "",
+    activeClothingType !== "all" ? activeClothingType : "",
+    activeBrand !== "all" ? brands.get(activeBrand) : "",
+    activeStatus !== "all" ? activeStatus : "",
+  ].filter(Boolean);
+  $("#filterSummary").hidden = labels.length === 0;
+  $("#activeFilterText").textContent = labels.join(" · ");
+  const count = Number(activeClothingType !== "all") + Number(activeBrand !== "all") + Number(activeStatus !== "all");
+  $("#filterButton").classList.toggle("is-on", count > 0);
+  $("#filterButton").setAttribute("aria-label", count ? `Filters, ${count} active` : "Filters");
+}
+
+function clearFilters() {
+  searchInput.value = "";
+  activeStatus = activeClothingType = activeBrand = activeCategory = "all";
+  if (tab === "closet") history.replaceState(null, "", "#closet");
+  render();
+}
+
 function renderCatalog() {
+  renderFilters();
   const visible = visibleItems();
   const title = tab === "favorites" ? "Favorites" : tab === "recent" ? "Recently added" : activeCategory === "all" ? "All items" : activeCategory;
   $("#viewTitle").textContent = title;
@@ -1235,9 +1287,20 @@ $("#filterButton").addEventListener("click", () => {
 });
 document.querySelectorAll<HTMLButtonElement>("[data-status]").forEach((button) => button.addEventListener("click", () => {
   activeStatus = button.dataset.status ?? "all";
-  document.querySelectorAll("[data-status]").forEach((chip) => chip.classList.toggle("is-on", chip === button));
   render();
 }));
+$("#clothingTypeFilter").addEventListener("change", (event) => {
+  activeClothingType = (event.target as HTMLSelectElement).value;
+  renderCatalog();
+});
+$("#brandFilter").addEventListener("change", (event) => {
+  activeBrand = (event.target as HTMLSelectElement).value;
+  renderCatalog();
+});
+$("#clearFilters").addEventListener("click", () => {
+  clearFilters();
+  $("#filterButton").focus();
+});
 
 searchInput.addEventListener("input", renderCatalog);
 
@@ -1255,10 +1318,8 @@ $("#emptyAction").addEventListener("click", (event) => {
   if (action === "add") openItemDialog();
   else if (action === "closet") location.hash = "#closet";
   else {
-    searchInput.value = "";
-    activeStatus = "all";
-    document.querySelectorAll("[data-status]").forEach((chip) => chip.classList.toggle("is-on", (chip as HTMLElement).dataset.status === "all"));
-    render();
+    clearFilters();
+    searchInput.focus();
   }
 });
 
