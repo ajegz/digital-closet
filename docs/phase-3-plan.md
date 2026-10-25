@@ -1,6 +1,8 @@
 # Phase 3 plan: accounts and cloud sync (Supabase)
 
-Status: **backend created and app integration built 2026-10-22**: `src/sync.ts` (engine), `src/account.ts` (sheet), `src/supabase.ts` (client). Waiting on the email-template change and the first real sign-in to test sync end to end.
+Status: **live and verified end to end 2026-10-25.** Backend, app integration (`src/sync.ts`, `src/account.ts`, `src/supabase.ts`) and auth email setup are done.
+
+Verified with a throwaway piece on the real account (then deleted): push (row + both WebP photos in the owner's folder), pull (a cloud-side edit appeared after Sync now), second device (wiping IndexedDB with the session kept restored the piece, photos and exactly 5 collections, no duplicates), delete (row tombstoned, photo files removed). The test piece's tombstone row remains until tombstone purging exists.
 
 | | |
 |---|---|
@@ -141,6 +143,8 @@ create policy "Own items: remove" on public.items for delete to authenticated us
 - **Project:** new dedicated project on the current account (its second and last free slot).
 - **Region:** Singapore.
 - **Who signs in:** just MJ for now. Turn off public sign-ups once that account exists.
-- **Email:** Supabase's built-in sender while it's one user. Set up a custom SMTP sender (for example Resend) before inviting anyone.
+- **Email:** custom SMTP through Gmail (`smtp.gmail.com:465`, sender: the owner Gmail address, kept out of the repo, app password). Needed because templates can't be edited on the built-in sender. Supabase warns Gmail is for personal mail, so switch to a transactional sender (for example Resend with a verified domain) before inviting anyone.
+- **Templates:** "Magic link or OTP" and "Confirm sign up" send only `{{ .Token }}` (subject `{{ .Token }} is your Digital Closet code`), no link.
+- **Sign-ups:** disabled after MJ's account was created (`disable_signup: true`).
 - **Refinements while building:** the trigger function lives in a non-exposed `private` schema, and collection names are unique only among non-deleted collections (partial unique index), so a deleted collection can be recreated.
 - **Later:** purging tombstones older than 30 days isn't scheduled yet; the sync engine or a cron job will do it.
