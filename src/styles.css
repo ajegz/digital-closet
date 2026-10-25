@@ -265,8 +265,24 @@ button.task:active { transform: translateY(1px); }
 .detail-top-actions .btn svg { width: 20px; height: 20px; }
 #detailFavorite.is-on { color: var(--berry); }
 .detail-layout { display: grid; gap: 16px; }
+.detail-media { display: grid; gap: 12px; min-width: 0; align-content: start; }
 .detail-photo { position: relative; aspect-ratio: 4 / 5; display: grid; place-items: center; overflow: hidden; border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); background: var(--surface); }
-.detail-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.detail-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.photo-choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.photo-choices .chip { min-height: 44px; }
+.photo-caption { color: var(--muted); font-size: 14px; }
+.photo-remove { justify-self: start; text-align: left; }
+.ai-image-label { display: inline-block; align-self: flex-start; font-size: 14px; font-weight: 800; color: var(--grape-text); background: var(--grape-tint); border-radius: 8px; padding: 3px 8px; margin: 4px 0; }
+.import-preview { display: grid; gap: 12px; }
+.import-piece { display: grid; gap: 8px; padding: 12px; min-width: 0; }
+.import-piece h3 { font-size: 18px; overflow-wrap: anywhere; }
+.import-piece p { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.import-piece-photos { display: flex; gap: 12px; }
+.import-piece-photos figure { flex: 1; min-width: 0; margin: 0; }
+.import-piece-photos img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--surface); border-radius: 12px; }
+.import-piece-photos figcaption { font-size: 14px; font-weight: 800; margin-top: 4px; color: var(--ink); }
+#chatImportFile { width: 100%; min-width: 0; font-size: 16px; min-height: 50px; }
+#chatImportFile::file-selector-button { min-height: 44px; margin-right: 8px; border: 2px solid var(--line); border-radius: 8px; padding: 0 8px; background: var(--surface); color: var(--ink); font: inherit; }
 .detail-photo .sample-garment { width: 60%; height: 70%; }
 .detail-photo .btn { position: absolute; bottom: 16px; }
 .detail-info { display: grid; gap: 12px; align-content: start; min-width: 0; }

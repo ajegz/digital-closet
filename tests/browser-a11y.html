@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Digital Closet accessibility checks</title>
+    <style>body{margin:0}iframe{display:block;width:100vw;height:100dvh;border:0}.checks{position:fixed;left:4px;top:4px;z-index:10000;max-width:280px;background:white;color:black;font:14px system-ui;border:1px solid #777;padding:4px}.checks button{min-height:32px}.checks pre{max-height:35vh;overflow:auto;white-space:pre-wrap;margin:4px 0}</style>
+  </head>
+  <body>
+    <iframe id="app" src="/" title="Digital Closet under test"></iframe>
+    <aside class="checks" aria-label="Test controls"><button id="run">Run accessibility check</button><details><summary>Results</summary><pre id="results" data-testid="a11y-results">Ready</pre></details></aside>
+    <script>
+      const app = document.querySelector('#app');
+      let ready;
+      app.addEventListener('load', () => {
+        ready = new Promise((resolve, reject) => {
+          const script = app.contentDocument.createElement('script');
+          script.src = '/node_modules/axe-core/axe.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          app.contentDocument.head.append(script);
+        });
+      });
+      document.querySelector('#run').addEventListener('click', async () => {
+        const output = document.querySelector('#results');
+        output.textContent = 'Running';
+        try {
+          await ready;
+          const report = await app.contentWindow.axe.run(app.contentDocument, {runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa','best-practice']}});
+          const record = {width:app.contentWindow.innerWidth,height:app.contentWindow.innerHeight,theme:app.contentDocument.documentElement.dataset.theme,route:app.contentWindow.location.hash,openDialog:app.contentDocument.querySelector('dialog[open]')?.id,violations:report.violations.map(({id,impact,nodes})=>({id,impact,nodes:nodes.map(({target,failureSummary})=>({target,failureSummary}))}))};
+          output.textContent = JSON.stringify(record, null, 2);
+          document.querySelector('details').open = true;
+        } catch(error) { output.textContent = String(error); }
+      });
+    </script>
+  </body>
+</html>

@@ -39,6 +39,25 @@ async function run<T>(storeName: StoreName, mode: IDBTransactionMode, action: (s
 
 export const loadItems = () => run<ClosetItem[]>("items", "readonly", (store) => store.getAll());
 export const saveItem = (item: ClosetItem) => run("items", "readwrite", (store) => store.put(item));
+
+/** Add a validated batch atomically. Existing IDs (including tombstones) must never be overwritten. */
+export async function saveItems(items: ClosetItem[]): Promise<void> {
+  if (items.length === 0) return;
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction("items", "readwrite");
+    const store = transaction.objectStore("items");
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error ?? new Error("The import was cancelled. No pieces were added."));
+    try {
+      for (const item of items) store.add(item);
+    } catch (error) {
+      transaction.abort();
+      reject(error);
+    }
+  });
+}
 export const removeItem = (id: string) => run("items", "readwrite", (store) => store.delete(id));
 export const getItem = (id: string) => run<ClosetItem | undefined>("items", "readonly", (store) => store.get(id));
 

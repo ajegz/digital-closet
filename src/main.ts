@@ -3,6 +3,7 @@ import { icons, type IconName } from "./icons";
 import { processPhoto } from "./photos";
 import { initAccount } from "./account";
 import { initDevice } from "./device";
+import { initChatImport } from "./import-ui";
 import { loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord } from "./storage";
 import { isSignedIn, requestSync, startSync } from "./sync";
 import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Outfit, type Status, type WearLog, type Weather } from "./types";
@@ -68,6 +69,8 @@ let viewingItemId: string | null = null;
 let detailReturn: { hash: string; scroll: number } | null = null;
 let editingId: string | null = null;
 let previewUrl: string | null = null;
+type PhotoView = "original" | "label" | "back" | "render";
+let photoView: { id: string; kind: PhotoView } | null = null;
 let toastTimer: number | undefined;
 
 function $<T extends HTMLElement = HTMLElement>(selector: string): T {
@@ -270,7 +273,7 @@ function startTask(kind: TaskKind) {
 
 function applyHash(hash: string) {
   // Back/forward while a sheet is open should leave the sheet, like a native app.
-  for (const dialog of [itemDialog, pickerDialog, addMenu]) if (dialog.open) dialog.close();
+  for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog[open]")) dialog.close();
 
   if (hash.startsWith("#item-")) {
     const id = decodeURIComponent(hash.slice("#item-".length));
@@ -329,7 +332,8 @@ function visibleItems() {
 }
 
 function cardHtml(item: ClosetItem) {
-  const photo = item.thumb ?? item.image;
+  const studio = item.renderThumb ?? item.renderImage;
+  const photo = studio ?? item.thumb ?? item.image;
   const visual = photo
     ? `<img src="${escapeHtml(photo)}" alt="" loading="lazy">`
     : `<div class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></div>`;
@@ -342,7 +346,7 @@ function cardHtml(item: ClosetItem) {
     <article class="item-card${item.sample ? " is-sample" : ""}" data-id="${escapeHtml(item.id)}">
       <div class="item-visual">${visual}</div>
       ${heart}
-      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p>${statusPill(item)}</div>
+      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p>${studio ? `<span class="ai-image-label">AI-generated</span>` : ""}${statusPill(item)}</div>
     </article>`;
 }
 
@@ -425,10 +429,7 @@ function renderDetail(item: ClosetItem) {
   favorite.setAttribute("aria-pressed", String(item.favorite));
   favorite.setAttribute("aria-label", `Favorite ${item.name}`);
 
-  const photo = item.image ?? item.thumb;
-  $("#detailPhoto").innerHTML = photo
-    ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(item.name)}">`
-    : `<div class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></div><button class="btn btn-secondary" type="button" data-edit-field="photo">${icons.camera}Add photo</button>`;
+  renderPhotoViews(item);
 
   const filled = DETAIL_FIELDS.filter((isFilled) => isFilled(item)).length;
   const complete = filled === DETAIL_FIELDS.length;
@@ -457,6 +458,47 @@ function renderDetail(item: ClosetItem) {
   $("#detailCareText").innerHTML = item.care
     ? escapeHtml(item.care)
     : `<button class="detail-add" type="button" data-edit-field="care">Add care notes</button>`;
+}
+
+function renderPhotoViews(item: ClosetItem) {
+  const views: { kind: PhotoView; label: string; image: string | undefined }[] = [
+    { kind: "original", label: "Original", image: item.image ?? item.thumb },
+    { kind: "label", label: "Label", image: item.labelImage },
+    { kind: "back", label: "Back", image: item.backImage },
+    { kind: "render", label: "AI-generated", image: item.renderImage ?? item.renderThumb },
+  ];
+  const available = views.filter((view) => view.image);
+  const preferred = photoView?.id === item.id ? photoView.kind : item.renderImage ? "render" : "original";
+  const selected = available.find((view) => view.kind === preferred) ?? available[0];
+  photoView = { id: item.id, kind: selected?.kind ?? "original" };
+  $("#detailPhoto").innerHTML = selected
+    ? `<img src="${escapeHtml(selected.image)}" alt="${escapeHtml(`${selected.label}: ${item.name}`)}">`
+    : `<div class="sample-garment ${item.garment ?? garmentFor(item.category)}" aria-hidden="true"></div><button class="btn btn-secondary" type="button" data-edit-field="photo">${icons.camera}Add photo</button>`;
+  $("#detailPhoto").classList.toggle("has-views", available.length > 1);
+  const choices = $("#detailPhotoChoices");
+  choices.hidden = available.length < 2;
+  choices.innerHTML = available.map((view) => `<button type="button" class="chip${view.kind === selected?.kind ? " is-on" : ""}" data-photo-view="${view.kind}" aria-pressed="${view.kind === selected?.kind}">${view.label}</button>`).join("");
+  const caption = $("#detailPhotoCaption");
+  caption.hidden = !selected || (selected.kind !== "render" && available.length < 2);
+  caption.textContent = selected?.kind === "render" ? "AI-generated studio image. Compare it with your original photo." : selected?.kind === "label" ? "Your original label photo." : selected?.kind === "back" ? "Your original back photo." : "Your original front photo.";
+  $("#removeStudioButton").hidden = !item.renderImage && !item.renderPath;
+}
+
+function removeStudioImage(item: ClosetItem) {
+  const before = { renderImage: item.renderImage, renderThumb: item.renderThumb, renderPath: item.renderPath, renderThumbPath: item.renderThumbPath, ai: item.ai };
+  const ai = { ...item.ai };
+  delete ai.render;
+  Object.assign(item, { renderImage: undefined, renderThumb: undefined, renderDirty: true, ai: Object.keys(ai).length ? ai : undefined, updatedAt: Date.now(), dirty: true });
+  photoView = { id: item.id, kind: "original" };
+  render();
+  void persistAndSync(saveItem(item));
+  showToast({ kind: "info", title: "Studio image removed", message: "Your original photos are kept.", action: { label: "Undo", run: () => {
+    const current = items.find((entry) => entry.id === item.id);
+    if (!current) return;
+    Object.assign(current, before, { renderDirty: true, updatedAt: Date.now(), dirty: true });
+    render();
+    void persistAndSync(saveItem(current));
+  } } });
 }
 
 function renderStats() {
@@ -710,7 +752,7 @@ function deleteEditingItem() {
       label: "Undo",
       run: () => {
         // The cloud may already have dropped the photo with the deletion, so send it again.
-        const restored = { ...item, updatedAt: Date.now(), dirty: true, photoDirty: Boolean(item.image) };
+        const restored = { ...item, updatedAt: Date.now(), dirty: true, photoDirty: Boolean(item.image), labelDirty: Boolean(item.labelImage), backDirty: Boolean(item.backImage), renderDirty: Boolean(item.renderImage) };
         items = [restored, ...items];
         render();
         void persistAndSync(saveItem(restored));
@@ -1149,6 +1191,13 @@ $("#itemScreen").addEventListener("click", (event) => {
   const target = event.target as Element;
   if (target.closest("#detailBack")) closeDetail();
   else if (target.closest("#detailEdit")) openItemDialog(item);
+  else if (target.closest("#removeStudioButton")) removeStudioImage(item);
+  else if (target.closest("[data-photo-view]")) {
+    const kind = target.closest<HTMLElement>("[data-photo-view]")!.dataset.photoView as PhotoView;
+    photoView = { id: item.id, kind };
+    renderPhotoViews(item);
+    document.querySelector<HTMLButtonElement>(`[data-photo-view="${kind}"]`)?.focus();
+  }
   else if (target.closest("#woreTodayButton")) addPieceToToday(item);
   else if (target.closest("#detailFavorite")) {
     item.favorite = !item.favorite;
@@ -1277,6 +1326,10 @@ async function init() {
   applyHash(location.hash);
   initAccount(showToast);
   initDevice();
+  initChatImport(async () => {
+    await loadState();
+    render();
+  });
   // Changes pulled from the cloud (or a sign-out clearing this device) reload everything from IndexedDB.
   void startSync({
     onDataChanged: async () => {

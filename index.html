@@ -124,7 +124,12 @@
               </div>
             </div>
             <div class="detail-layout">
-              <div class="detail-photo" id="detailPhoto"></div>
+              <div class="detail-media">
+                <div class="detail-photo" id="detailPhoto"></div>
+                <div class="photo-choices" id="detailPhotoChoices" role="group" aria-label="Photo views" hidden></div>
+                <p class="photo-caption" id="detailPhotoCaption" aria-live="polite" hidden></p>
+                <button class="detail-add photo-remove" id="removeStudioButton" type="button" hidden>Remove studio image</button>
+              </div>
               <div class="detail-info">
                 <p class="detail-collection" id="detailCollection"></p>
                 <h2 class="detail-name" id="detailName"></h2>
@@ -309,6 +314,7 @@
         <button class="sheet-close" type="button" data-close-menu aria-label="Close"><span data-icon="close"></span></button>
         <h2 class="sheet-title" id="addMenuTitle">What would you like to add?</h2>
         <button class="menu-option" type="button" data-add="piece"><span class="menu-icon is-leaf" data-icon="camera"></span><span class="menu-text"><strong>Add a piece</strong><small>A photo and details of something you own</small></span></button>
+        <button class="menu-option" type="button" data-chat-import><span class="menu-icon is-sky" data-icon="layers"></span><span class="menu-text"><strong>Import from chat</strong><small>Prepared pieces with your originals and studio images</small></span></button>
         <button class="menu-option" type="button" data-add="log"><span class="menu-icon is-sky" data-icon="calendar"></span><span class="menu-text"><strong>Log what I wore</strong><small>Today or any other day</small></span></button>
         <button class="menu-option" type="button" data-add="outfit"><span class="menu-icon is-grape" data-icon="layers"></span><span class="menu-text"><strong>Create an outfit</strong><small>Save pieces you wear together</small></span></button>
       </div>
@@ -332,6 +338,21 @@
           <button class="btn btn-danger" id="pickerDelete" type="button" hidden>Delete</button>
           <button class="btn btn-primary" id="pickerSave" type="submit">Save</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog class="sheet" id="chatImportDialog" aria-labelledby="chatImportTitle">
+      <form class="sheet-card" id="chatImportForm" novalidate>
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <button class="sheet-close" type="button" data-close-import aria-label="Close"><span data-icon="close"></span></button>
+        <h2 class="sheet-title" id="chatImportTitle">Import from chat</h2>
+        <p class="account-text">Add the pieces prepared in your chat. Your original photos stay separate from AI-generated studio images.</p>
+        <label class="field">Prepared file<input id="chatImportFile" type="file" accept="application/json,.json" aria-describedby="chatImportHint" /></label>
+        <p class="account-text" id="chatImportHint">Choose a Digital Closet JSON file. Up to 10 pieces and 30 MB.</p>
+        <p class="account-text" id="chatImportStatus" role="status" aria-live="polite"></p>
+        <div class="import-preview" id="chatImportPreview"></div>
+        <p class="form-error" id="chatImportError" role="alert" hidden></p>
+        <div class="sheet-actions"><button class="btn btn-primary" id="chatImportSave" type="submit" disabled>Add to closet</button></div>
       </form>
     </dialog>
 
