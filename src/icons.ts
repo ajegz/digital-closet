@@ -25,7 +25,7 @@ export const icons = {
   edit: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
   // Hangie, the Digital Closet mascot: a friendly green hanger.
   hangie: `<svg class="hangie" viewBox="0 0 120 120" aria-hidden="true">
-    <path d="M60 36V27c0-6 11-6 11-14a11 11 0 0 0-22 0" fill="none" stroke="#4b4b4b" stroke-width="6" stroke-linecap="round"/>
+    <path d="M60 36V27c0-6 11-6 11-14a11 11 0 0 0-22 0" fill="none" stroke="var(--hangie-line, #4b4b4b)" stroke-width="6" stroke-linecap="round"/>
     <path d="M60 41 101 82c4 4 1.5 11-4.5 11H23.5c-6 0-8.5-7-4.5-11Z" fill="var(--leaf-ledge)" stroke="var(--leaf-ledge)" stroke-width="8" stroke-linejoin="round"/>
     <path d="M60 35 101 76c4 4 1.5 11-4.5 11H23.5c-6 0-8.5-7-4.5-11Z" fill="var(--leaf)" stroke="var(--leaf)" stroke-width="8" stroke-linejoin="round"/>
     <ellipse cx="48" cy="63" rx="7" ry="8" fill="#fff"/><ellipse cx="72" cy="63" rx="7" ry="8" fill="#fff"/>

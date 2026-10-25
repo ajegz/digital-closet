@@ -2,6 +2,7 @@ import "./styles.css";
 import { icons, type IconName } from "./icons";
 import { processPhoto } from "./photos";
 import { initAccount } from "./account";
+import { initDevice } from "./device";
 import { loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord } from "./storage";
 import { isSignedIn, requestSync, startSync } from "./sync";
 import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Outfit, type Status, type WearLog, type Weather } from "./types";
@@ -1042,6 +1043,11 @@ $(".tabbar").addEventListener("click", (event) => {
   window.scrollTo({ top: 0 });
 });
 
+$(".skip-link").addEventListener("click", (event) => {
+  // "#main" isn't a route, so focus the content instead of letting the hash change.
+  event.preventDefault();
+  $("#main").focus();
+});
 $("#addFab").addEventListener("click", () => addMenu.showModal());
 addMenu.addEventListener("click", (event) => {
   const target = event.target as Element;
@@ -1270,6 +1276,7 @@ async function init() {
   }
   applyHash(location.hash);
   initAccount(showToast);
+  initDevice();
   // Changes pulled from the cloud (or a sign-out clearing this device) reload everything from IndexedDB.
   void startSync({
     onDataChanged: async () => {

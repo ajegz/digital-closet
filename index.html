@@ -4,13 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Closet" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="Digital Closet — catalog your wardrobe, one piece at a time." />
     <title>Digital Closet</title>
+    <script>
+      // Set the theme before first paint so dark mode never flashes white. src/device.ts keeps it updated.
+      (function () {
+        var pref = "system";
+        try { pref = localStorage.getItem("theme") || "system"; } catch (error) {}
+        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <div class="app">
       <nav class="tabbar" aria-label="Main">
         <a class="brand" href="#closet"><span class="brand-mascot" data-icon="hangie"></span><span>digital closet</span></a>
@@ -29,7 +47,7 @@
           </div>
         </header>
 
-        <main class="content">
+        <main class="content" id="main" tabindex="-1">
           <section class="screen" id="closetScreen" aria-labelledby="viewTitle">
             <div class="dashboard" id="dashboard">
               <section class="hero-card card">
@@ -262,6 +280,21 @@
           <p class="account-note">Signing out removes this device’s copy. Your closet stays safe in your account.</p>
         </section>
 
+        <section class="device-settings" aria-labelledby="deviceTitle">
+          <h3 class="device-title" id="deviceTitle">This device</h3>
+          <fieldset class="chip-field" id="themeField">
+            <legend class="field">Appearance</legend>
+            <label class="chip"><input type="radio" name="theme" value="system" /> System</label>
+            <label class="chip"><input type="radio" name="theme" value="light" /> Light</label>
+            <label class="chip"><input type="radio" name="theme" value="dark" /> Dark</label>
+          </fieldset>
+          <div class="install-row card" id="installRow" hidden>
+            <span class="install-icon" data-icon="hangie"></span>
+            <div class="install-text"><strong>Install the app</strong><span id="installHint">Open Digital Closet from your home screen, full screen.</span></div>
+            <button class="btn btn-secondary" id="installButton" type="button">Install</button>
+          </div>
+        </section>
+
         <section class="account-step" id="offStep" hidden>
           <div class="account-mascot" data-icon="hangie"></div>
           <h2 class="sheet-title">Saved on this device</h2>
@@ -291,7 +324,7 @@
         <label class="field" id="outfitNameField">Name<input id="outfitNameInput" maxlength="60" placeholder="e.g. Monday office" autocomplete="off" /></label>
         <label class="field" id="wornOnField">Day<input id="wornOnInput" type="date" /></label>
         <div class="picker-outfits" id="pickerOutfits" hidden></div>
-        <div class="picker-head"><strong id="pickerCount">Pick the pieces</strong></div>
+        <div class="picker-head"><strong id="pickerCount" aria-live="polite">Pick the pieces</strong></div>
         <div class="chip-scroller" id="pickerFilters" role="group" aria-label="Filter pieces by collection"></div>
         <div class="picker-grid" id="pickerGrid"></div>
         <p class="form-error" id="pickerError" role="alert" hidden></p>
