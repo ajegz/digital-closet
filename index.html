@@ -25,7 +25,6 @@
         <header class="topbar">
           <h1 class="topbar-title" id="screenTitle">Closet</h1>
           <div class="topbar-stats">
-            <span class="stat-pill is-xp" id="xpPill"><span class="stat-pill-icon" data-icon="bolt"></span><b id="xpCount">0</b></span>
             <button class="account-button" id="accountButton" type="button" aria-label="Account and backup"><span data-icon="user"></span><span class="sync-dot" id="accountDot" hidden></span></button>
           </div>
         </header>
@@ -37,11 +36,7 @@
                 <div class="hero-text">
                   <p class="eyebrow" id="todayLabel">Today</p>
                   <h2 class="hero-title" id="greeting">Let’s fill your closet</h2>
-                  <div class="level-row">
-                    <span class="level-badge" id="levelBadge">Lv 1</span>
-                    <div class="progress is-xp"><span id="xpBar"></span></div>
-                  </div>
-                  <p class="level-meta" id="xpToNext">0 / 100 XP to level 2</p>
+                  <p class="hero-sub" id="heroSub">Everything you own, easy to find.</p>
                 </div>
                 <div class="hero-mascot" data-icon="hangie"></div>
               </section>
@@ -238,7 +233,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden>
       <span class="toast-icon" id="toastIcon"></span>
       <span class="toast-text"><strong id="toastTitle"></strong><span id="toastMessage"></span></span>
-      <span class="xp-chip" id="toastXp" hidden></span>
       <button class="toast-action" id="toastAction" type="button" hidden></button>
     </div>
     <script type="module" src="/src/main.ts"></script>

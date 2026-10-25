@@ -1,6 +1,6 @@
 ---
 name: duolingo-style
-description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell, XP/levels and Today's-tasks game loop and the hanger mascot. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). It is the source of truth when design skills disagree (see §0); pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
+description: Digital Closet's playful, Duolingo-inspired, mobile-first design system — chunky 3D buttons, bright palette, rounded type, bottom-tab app shell and the hanger mascot. Visual style only: no game mechanics. Use for any UI work in this project (new screens, components, restyling, copy, empty states, celebrations). It is the source of truth when design skills disagree (see §0); pair with mobile-ux-optimizer for viewport, touch and safe-area rules.
 ---
 
 # Duolingo-style design system (Digital Closet)
@@ -14,13 +14,13 @@ The tokens live in `:root` at the top of `src/styles.css`. Use the variables; ne
 This file is the project's committed design brief **and** its design-engineering layer. Several other design skills are installed in `.claude/skills/`; when they disagree, the higher item wins:
 
 1. **The user's request in the conversation.**
-2. **duolingo-style (this file)** — tokens, components, motion values, copy voice and game-loop rules. Every other skill's advice is filtered through it.
+2. **duolingo-style (this file)** — tokens, components, motion values, copy voice and the no-gamification rule (§5). Every other skill's advice is filtered through it.
 3. **mobile-ux-optimizer** — viewport, touch targets, safe areas, gestures. It overrides this file only on those mechanics.
 4. **frontend-design** — the process for a new screen (plan → review against the brief → build → critique) and UX-writing rules. Its "generic tells" list (all-caps labels, eyebrows over headings, `A · B` meta strings) loses where this file pins a choice: uppercase button and tab labels are part of our brief. Use the list as a polish prompt instead: drop an eyebrow or a middle dot when it carries no information.
 5. **duo-\* skills** — *rationale only*: why a pattern works and when it doesn't. Never take token values, easing curves or fonts from them (they say so themselves).
    - `duo-design` — motion, celebration, character and accessibility rationale
-   - `duo-gamification` — XP, levels, quests, celebrations
-   - `duo-retention` — streaks and habit loops. Run its frequency check before adding or changing any daily mechanic.
+   - `duo-gamification` — reference only for feedback and celebration *feel*; never a reason to add XP, levels or rewards (§5)
+   - `duo-retention` — reference only for habit reasoning (e.g. its frequency check); never a reason to add streaks (§5)
    - `duo-voice` — copy for banners, errors, empty states and notifications
    - `duolingo` — the router; use it only to choose among the four above
 
@@ -28,7 +28,7 @@ Routing notes:
 
 - When the `duolingo` router hands UI craft to "design-engineering", that means **this file**. Don't suggest installing `AgentsORG/design-engineering`.
 - Links to duo skills that aren't installed (`duo-product`, `duo-growth`, `duo-streak-mechanics`, …) are dead ends: skip them, and don't install more of the pack without asking the user.
-- Motion conflict: the bouncy `--pop` easing is only for rewards (XP, level-up, favouriting). Everything else uses `ease-out` (§4).
+- Motion conflict: the bouncy `--pop` easing is only for small moments of delight (favouriting, a finished task). Everything else uses `ease-out` (§4).
 - Nothing from the duo-\* references licenses Duolingo's fonts, owl, names or brand assets.
 
 ## 1. Principles
@@ -36,7 +36,7 @@ Routing notes:
 1. **Phone first, desktop second.** Write base CSS for a 360–430px screen, then add `min-width` media queries. The same app on desktop is a centered column with a left rail instead of a bottom tab bar.
 2. **Feels like an app, not a website.** Fixed bottom tab bar, sticky top bar with stats, bottom sheets instead of centered modals on phones, no hover-only affordances.
 3. **Chunky and tactile.** Every pressable thing has a visible "ledge" and physically drops when pressed.
-4. **Reward progress, never shame.** Celebrate each saved piece (+XP), keep copy short and warm, no guilt or fake urgency.
+4. **Warm feedback, never pressure.** Confirm each save with a friendly banner, keep copy short and warm, no guilt or fake urgency.
 5. **Readable first.** Bright colours are for surfaces, fills and icons. Text must meet WCAG AA (see §2 contrast rules).
 
 ## 2. Tokens
@@ -47,8 +47,8 @@ Routing notes:
 | `--leaf-button` / `--leaf-button-ledge` | `#46a302` / `#357a01` | primary button face / ledge |
 | `--leaf-text` / `--leaf-tint` | `#3f7d00` / `#d7ffb8` | success text / success background |
 | `--sky` / `--sky-text` / `--sky-tint` / `--sky-line` | `#1cb0f6` / `#0b70aa` / `#ddf4ff` / `#84d8ff` | info, links, selected chip/tab |
-| `--flame` / `--flame-text` | `#ff9600` / `#b25f00` | task icon, the Phase 4 outfit streak |
-| `--sun` / `--sun-ledge` | `#ffc800` / `#e5a800` | XP, rewards, level badge |
+| `--flame` / `--flame-text` | `#ff9600` / `#b25f00` | task icon, warm accents |
+| `--sun` / `--sun-ledge` | `#ffc800` / `#e5a800` | highlights, the "needs review" tint |
 | `--berry` / `--berry-text` / `--berry-tint` | `#ff4b4b` / `#bb2525` / `#ffdfe0` | favourites, delete, errors |
 | `--grape` | `#ce82ff` | collections accent |
 | `--ink` | `#3c3c3c` | body and headings |
@@ -74,9 +74,9 @@ Routing notes:
 
 **Chip.** 2px border `--line`, ledge 3px, radius 12px, min-height 40px, label 800. Selected: `--sky-tint` background, `--sky-line` border, `--sky-text` label.
 
-**Progress bar.** Height 16px, track `--line`, fill `--leaf` (or `--sun` for XP), radius 999px, with a lighter 4px highlight strip inset near the top of the fill (`::after`, white at 30% opacity). Animate width 300ms ease-out.
+**Progress bar.** Height 16px, track `--line`, fill `--leaf`, radius 999px, with a lighter 4px highlight strip inset near the top of the fill (`::after`, white at 30% opacity). Animate width 300ms ease-out.
 
-**Stat pill (top bar).** Icon + bold number, no box. XP = bolt icon + `#9a6b00` number. The Phase 4 outfit streak will sit beside it as flame icon + `--flame-text`.
+**Top bar.** Screen title on the left; the account button (with its sync-status dot) on the right. No score or streak counters.
 
 **Bottom tab bar (phones).** Fixed, white, 2px top border, `padding-bottom: env(safe-area-inset-bottom)`. 4 tabs + a raised center Add button (56px circle, leaf-button face with ledge). Each tab ≥56px tall, icon 26px above a 11px uppercase label. Active tab: icon and label `--sky-text`, a `--sky-tint` rounded background with 2px `--sky-line` border.
 
@@ -84,28 +84,29 @@ Routing notes:
 
 **Bottom sheet.** `<dialog>` pinned to the bottom on phones, full width, radius 24px on top, a 40×5px grab handle, slides up 200ms ease-out, max-height 92dvh with internal scroll. From 600px up it becomes a centered 520px card.
 
-**Feedback banner (toast).** Slides up above the tab bar. Success: `--leaf-tint` background, `--leaf-text` bold label, mascot or check icon, optional XP chip. Error: `--berry-tint` / `--berry-text`. Undo is a text button in the banner. Auto-hide after 5s.
+**Feedback banner (toast).** Slides up above the tab bar. Success: `--leaf-tint` background, `--leaf-text` bold label, mascot or check icon. Error: `--berry-tint` / `--berry-text`. Undo is a text button in the banner. Auto-hide after 5s.
 
 **Empty state.** Mascot (96px) + one short headline (800) + one line of help + one chunky button. Never a bare "No results".
 
 ## 4. Motion
 
 - Press: 100ms. Sheets and banners: 200ms `ease-out` slide. Progress: 300ms `ease-out`.
-- Rewards ("+15 XP", level-up) pop with `cubic-bezier(.34,1.56,.64,1)` over 300ms.
+- Small delight moments (a heart filling, a task ticking) pop with `cubic-bezier(.34,1.56,.64,1)` over 300ms.
 - Everything respects `@media (prefers-reduced-motion: reduce)` — switch to instant changes.
 
-## 5. Game loop (closet edition)
+## 5. No gamification
 
-- **XP** (derived from the closet, not stored): 10 per piece, +5 with a photo, +5 with brand and colour filled in, +5 when marked Available (confirmed).
-- **Level**: every 100 XP. Show "Level N" badge and an XP bar to the next level.
-- **No streak yet.** `duo-retention`'s frequency check (2026-10-22): cataloging is front-loaded and occasional, not daily, so a daily streak would only manufacture guilt, and "any edit counts" rewarded busywork. The streak returns in **Phase 4** on "log today's outfit", which is genuinely daily and takes seconds. Give it a one-sentence reset rule and one free missed day per week.
-- **Today's tasks**: up to 3 tasks generated from what the closet is actually missing, easiest first: add a photo to 1 piece → confirm 2 pieces → add 3 new pieces (only while the closet has fewer than 20) → fill in details on 3 pieces. Only real progress counts (a first photo, a confirmation, a newly filled field, a new piece). Today's progress is added back into each target, so targets stay put as the backlog shrinks. Each open task is a button that takes you to the work. With no backlog the card says "All caught up". There's no penalty for skipping a day, and finishing all of them gets a celebration banner but no bonus XP.
-- **Celebrate** every save with a feedback banner showing the XP gained; a level-up gets its own banner.
-- Later phases add wear logging; "log today's outfit" becomes the main daily habit.
+"Duolingo-style" here means the **visual design only** (MJ, 2026-10-25). Don't add XP, points, levels, streaks, badges, leaderboards or reward mechanics unless MJ explicitly asks.
+
+What stays, because it's practical rather than a game:
+
+- **Today's tasks**: up to 3 tasks built from what the closet is actually missing, easiest first: log what you wore today → add a photo to 1 piece → confirm 2 pieces → add 3 new pieces (only while the closet has fewer than 20) → fill in details on 3 pieces. Only real progress counts; finished tasks stay ticked for the day; each open task opens the work; "All caught up" when nothing is missing; no penalty for skipping.
+- **Feedback banners** that confirm what happened ("Saved", "Deleted · Undo", "Today's tasks done").
+- **Wear stats** (Phase 4: times worn, last worn, cost per wear, pieces not worn lately) are information, not scores.
 
 ## 6. Copy voice
 
-Short, second person, upbeat, plain words. Buttons are verbs ("Add piece", "Save", "Undo"). Celebrate specifics ("Nice! Linen shirt is in your closet. +20 XP"). No exclamation spam — one per message max. No guilt ("You haven't…") — invite instead ("Add a piece to start a streak").
+Short, second person, upbeat, plain words. Buttons are verbs ("Add piece", "Save", "Undo"). Confirm specifics ("Nice! Linen shirt is in your closet."). No exclamation spam — one per message max. No guilt ("You haven't…") — invite instead ("Add a piece to start a streak").
 
 ## 7. Checklist before shipping a screen
 

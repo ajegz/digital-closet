@@ -65,7 +65,6 @@ svg.icon { width: 24px; height: 24px; display: block; }
 .progress { position: relative; height: 16px; flex: 1; background: var(--line); border-radius: 999px; overflow: hidden; }
 .progress span { position: relative; display: block; height: 100%; width: 0; background: var(--leaf); border-radius: 999px; transition: width .3s ease-out; }
 .progress span::after { content: ""; position: absolute; left: 8px; right: 8px; top: 4px; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .3); }
-.progress.is-xp span { background: var(--sun); }
 
 .icon-button { width: 50px; height: 50px; flex: 0 0 50px; display: grid; place-items: center; border: 2px solid var(--line); border-bottom-width: 4px; border-radius: var(--radius); background: var(--bg); color: var(--muted); transition: transform .1s; }
 .icon-button:active { transform: translateY(2px); border-bottom-width: 2px; }
@@ -81,11 +80,6 @@ input::placeholder { color: var(--faint); }
 .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: env(safe-area-inset-top, 0px) var(--gutter) 0; background: rgba(255, 255, 255, .94); backdrop-filter: blur(8px); border-bottom: 2px solid var(--line); }
 .topbar-title { font-size: 22px; font-weight: 900; letter-spacing: -.01em; }
 .topbar-stats { display: flex; gap: 14px; }
-.stat-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 17px; font-weight: 900; min-height: 44px; }
-.stat-pill-icon svg { width: 26px; height: 26px; }
-.stat-pill.is-xp { color: #9a6b00; }
-.stat-pill.is-xp .stat-pill-icon { color: var(--sun); }
-.stat-pill.is-bump { animation: bump .3s var(--pop); }
 
 .content { width: 100%; max-width: 1040px; margin: 0 auto; padding: 16px var(--gutter) 0; }
 .screen { display: grid; gap: 16px; }
@@ -106,12 +100,10 @@ input::placeholder { color: var(--faint); }
 .dashboard { display: grid; gap: 12px; }
 .hero-card { display: flex; align-items: center; gap: 12px; padding: 18px 16px 16px; }
 .hero-text { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.hero-sub { color: var(--muted); }
 .hero-title { font-size: 24px; line-height: 1.15; font-weight: 900; letter-spacing: -.01em; }
 .hero-mascot { flex: 0 0 auto; }
 .hero-mascot svg { width: 92px; height: 92px; animation: bob 3s ease-in-out infinite; }
-.level-row { display: flex; align-items: center; gap: 10px; }
-.level-badge { flex: 0 0 auto; padding: 3px 10px; border-radius: 999px; background: var(--sun); color: var(--ink); font-size: 13px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; box-shadow: 0 3px 0 var(--sun-ledge); }
-.level-meta { font-size: 14px; color: var(--muted); }
 
 .tasks-card { display: grid; gap: 10px; padding: 14px 16px 8px; }
 .tasks-head { display: flex; align-items: center; gap: 14px; }
@@ -321,7 +313,6 @@ button.task:active { transform: translateY(1px); }
 .toast-icon svg { width: 36px; height: 36px; }
 .toast-text { flex: 1; min-width: 0; display: grid; font-size: 15px; }
 .toast-text strong { font-size: 17px; font-weight: 900; }
-.xp-chip { padding: 4px 10px; border-radius: 999px; background: var(--sun); color: var(--ink); font-size: 14px; font-weight: 900; box-shadow: 0 3px 0 var(--sun-ledge); animation: bump .3s var(--pop) .1s both; }
 .toast-action { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--sky-text); font-size: 15px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
 
 /* ---------- Motion ---------- */

@@ -13,7 +13,6 @@ const DEFAULT_CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Dresses", "Accessor
 const UNTITLED = "Untitled piece";
 const RECENT_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const XP_PER_LEVEL = 100;
 // Until the closet holds this many pieces, "add new pieces" stays on the task ladder.
 const STARTER_CLOSET = 20;
 const MAX_TASKS = 3;
@@ -150,16 +149,6 @@ async function persistAndSync(task: Promise<unknown>) {
 
 /* ---------- Game loop (see duolingo-style skill §5) ---------- */
 
-function itemXp(item: ClosetItem) {
-  let xp = 10;
-  if (item.image) xp += 5;
-  if (known(item.brand) && known(item.color)) xp += 5;
-  if (item.status === "Confirmed") xp += 5;
-  return xp;
-}
-
-const totalXp = () => items.reduce((sum, item) => sum + itemXp(item), 0);
-const levelFor = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
 
 /* ---------- Today's tasks: a ladder built from what the closet is missing, easiest first ---------- */
 
@@ -445,18 +434,9 @@ function renderDetail(item: ClosetItem) {
 
 function renderStats() {
   const count = items.length;
-  const xp = totalXp();
-  const level = levelFor(xp);
-  const levelXp = xp % XP_PER_LEVEL;
 
   $("#todayLabel").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   $("#greeting").textContent = count ? `${plural(count, "piece")} and counting` : "Let’s fill your closet";
-  $("#levelBadge").textContent = `Lv ${level}`;
-  $("#xpBar").style.width = `${levelXp}%`;
-  $("#xpToNext").textContent = `${levelXp} / ${XP_PER_LEVEL} XP to level ${level + 1}`;
-
-  $("#xpCount").textContent = String(xp);
-  $("#xpPill").setAttribute("aria-label", `${xp} XP, level ${level}`);
   renderTasks();
 
   const withPhotos = items.filter((item) => item.image).length;
@@ -508,20 +488,16 @@ interface ToastOptions {
   kind?: "success" | "error" | "info";
   title: string;
   message: string;
-  xp?: number;
   action?: { label: string; run: () => void };
 }
 
-function showToast({ kind = "success", title, message, xp, action }: ToastOptions) {
+function showToast({ kind = "success", title, message, action }: ToastOptions) {
   window.clearTimeout(toastTimer);
   toast.hidden = true;
   toast.className = `toast${kind === "success" ? "" : ` is-${kind}`}`;
   $("#toastIcon").innerHTML = kind === "success" ? icons.hangie : "";
   $("#toastTitle").textContent = title;
   $("#toastMessage").textContent = message;
-  const xpChip = $("#toastXp");
-  xpChip.hidden = !xp;
-  xpChip.textContent = xp ? `+${xp} XP` : "";
   const button = $<HTMLButtonElement>("#toastAction");
   button.hidden = !action;
   button.textContent = action?.label ?? "";
@@ -532,12 +508,6 @@ function showToast({ kind = "success", title, message, xp, action }: ToastOption
   toastTimer = window.setTimeout(() => { toast.hidden = true; }, TOAST_MS);
 }
 
-function bumpXp() {
-  const pill = $("#xpPill");
-  pill.classList.remove("is-bump");
-  void pill.offsetWidth;
-  pill.classList.add("is-bump");
-}
 
 /* ---------- Add / edit sheet ---------- */
 
@@ -630,27 +600,19 @@ function readDetails(formData: FormData) {
   };
 }
 
-function celebrate(xpBefore: number, tasksDoneBefore: boolean, fallback: { title: string; message: string }) {
-  const xpAfter = totalXp();
-  const xpGained = xpAfter - xpBefore;
-  if (levelFor(xpAfter) > levelFor(xpBefore)) {
-    showToast({ title: `Level ${levelFor(xpAfter)}!`, message: "Your closet is leveling up.", xp: xpGained });
-  } else if (!tasksDoneBefore && allTasksDone()) {
-    showToast({ title: "Today’s tasks done!", message: "Your closet is in better shape than this morning.", xp: xpGained > 0 ? xpGained : undefined });
-  } else {
-    showToast({ ...fallback, xp: xpGained > 0 ? xpGained : undefined });
-  }
+function celebrate(tasksDoneBefore: boolean, fallback: { title: string; message: string }) {
+  if (!tasksDoneBefore && allTasksDone()) showToast({ title: "Today’s tasks done!", message: "Your closet is in better shape than this morning." });
+  else showToast(fallback);
 }
 
 async function saveFromForm() {
   const details = readDetails(new FormData(itemForm));
   const files = Array.from(photoInput.files ?? []);
   const existing = items.find((entry) => entry.id === editingId);
-  const xpBefore = totalXp();
   const tasksDoneBefore = allTasksDone();
 
   if (!existing && files.length > 1) {
-    await saveMany(files, details, xpBefore, tasksDoneBefore);
+    await saveMany(files, details, tasksDoneBefore);
     return;
   }
 
@@ -666,14 +628,13 @@ async function saveFromForm() {
   logProgress(existing, item);
   itemDialog.close();
   render();
-  bumpXp();
-  celebrate(xpBefore, tasksDoneBefore, existing
+  celebrate(tasksDoneBefore, existing
     ? { title: "Saved", message: `${item.name} is up to date.` }
     : { title: "Nice!", message: `${item.name} is in your closet.` });
   await persistAndSync(saveItem(item));
 }
 
-async function saveMany(files: File[], details: ReturnType<typeof readDetails>, xpBefore: number, tasksDoneBefore: boolean) {
+async function saveMany(files: File[], details: ReturnType<typeof readDetails>, tasksDoneBefore: boolean) {
   const created: ClosetItem[] = [];
   for (const [index, file] of files.entries()) {
     saveButton.textContent = `Adding ${index + 1} of ${files.length}…`;
@@ -687,8 +648,7 @@ async function saveMany(files: File[], details: ReturnType<typeof readDetails>, 
   logProgress(undefined, created[0], created.length);
   itemDialog.close();
   render();
-  bumpXp();
-  celebrate(xpBefore, tasksDoneBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
+  celebrate(tasksDoneBefore, { title: `${created.length} pieces added`, message: "Open each one to fill in the details." });
   await persistAndSync(Promise.all(created.map(saveItem)));
 }
 
