@@ -39,6 +39,11 @@ export type Database = {
       };
       items: {
         Row: {
+          ai: Json | null;
+          label_path: string | null;
+          back_path: string | null;
+          render_path: string | null;
+          render_thumb_path: string | null;
           brand: string | null;
           care: string | null;
           category: string;
@@ -63,6 +68,11 @@ export type Database = {
           weather: string[] | null;
         };
         Insert: {
+          ai?: Json | null;
+          label_path?: string | null;
+          back_path?: string | null;
+          render_path?: string | null;
+          render_thumb_path?: string | null;
           brand?: string | null;
           care?: string | null;
           category: string;
@@ -87,6 +97,11 @@ export type Database = {
           weather?: string[] | null;
         };
         Update: {
+          ai?: Json | null;
+          label_path?: string | null;
+          back_path?: string | null;
+          render_path?: string | null;
+          render_thumb_path?: string | null;
           brand?: string | null;
           care?: string | null;
           category?: string;

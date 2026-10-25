@@ -2,11 +2,11 @@
 // IndexedDB stays the source of truth on the device; this module pulls the cloud's changes,
 // then pushes local ones. Conflicts resolve by the newest updated_at (last write wins).
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "./database.types";
+import type { Database, Json } from "./database.types";
 import { blobToDataUrl, dataUrlToBlob, recompressDataUrl } from "./photos";
 import { clearAll, getItem, getRecord, loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord, type RecordStore } from "./storage";
 import { PHOTO_BUCKET, supabase } from "./supabase";
-import { UNKNOWN, type ClosetItem, type Collection, type Occasion, type Outfit, type WearLog, type Weather } from "./types";
+import { UNKNOWN, type ClosetItem, type Collection, type ItemAI, type Occasion, type Outfit, type WearLog, type Weather } from "./types";
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 type ItemInsert = Database["public"]["Tables"]["items"]["Insert"];
@@ -63,6 +63,18 @@ const listeners = new Set<(status: SyncStatus) => void>();
 
 export const isSignedIn = () => Boolean(session);
 export const getStatus = () => status;
+
+/** Checks stable chat-import ids, including cloud tombstones; RLS still applies. */
+export async function findExistingItemIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length > 10) throw new Error("Check at most 10 imported pieces at a time.");
+  if (!ids.length) return new Set();
+  if (ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new Error("An imported piece has an invalid id.");
+  }
+  const { data, error } = await client().from("items").select("id").eq("user_id", userId()).in("id", ids);
+  if (error) throw error;
+  return new Set(data.map((row) => row.id));
+}
 
 export function onStatus(listener: (status: SyncStatus) => void) {
   listeners.add(listener);
@@ -210,16 +222,20 @@ async function runOnce() {
 }
 
 function describe(error: unknown) {
-  if (error instanceof Error) return error.message;
-  const message = (error as { message?: unknown } | null)?.message;
-  return typeof message === "string" ? message : String(error);
+  const message = error instanceof Error ? error.message : (error as { message?: unknown } | null)?.message;
+  const text = typeof message === "string" ? message : String(error);
+  if (/column|schema cache/i.test(text) && /label_path|back_path|render_path|render_thumb_path|\bai\b/i.test(text)) {
+    return "Cloud backup needs the chat-import database update. Your changes are still saved on this device.";
+  }
+  return text;
 }
 
 function isNetworkError(error: unknown) {
   return !navigator.onLine || /failed to fetch|networkerror|load failed|fetch failed/i.test(describe(error));
 }
 
-const needsPush = (item: ClosetItem) => item.dirty !== false && !item.sample;
+const needsPush = (item: ClosetItem) => !item.sample && (item.dirty !== false
+  || item.photoDirty === true || item.labelDirty === true || item.backDirty === true || item.renderDirty === true);
 
 async function countPending() {
   const [items, collections, outfits, wearLogs] = await Promise.all([loadItems(), loadMeta<Collection[]>("collections"), loadRecords("outfits"), loadRecords("wearLogs")]);
@@ -239,10 +255,35 @@ function overlapStart(cursor?: Cursor): Cursor | undefined {
 
 /* ---------- Items ---------- */
 
+// Explicit columns detect an unapplied migration before any additional photos are uploaded.
+const ITEM_COLUMNS = "id,user_id,name,category,brand,color,status,favorite,size,material,weather,occasions,price,purchased_on,store,care,photo_path,thumb_path,label_path,back_path,render_path,render_thumb_path,ai,created_at,updated_at,deleted_at,synced_at";
+
+type MediaKind = "photo" | "label" | "back" | "render";
+type ImageKey = "image" | "thumb" | "labelImage" | "backImage" | "renderImage" | "renderThumb";
+type PathKey = "photoPath" | "thumbPath" | "labelPath" | "backPath" | "renderPath" | "renderThumbPath";
+type DirtyKey = "photoDirty" | "labelDirty" | "backDirty" | "renderDirty";
+interface MediaSpec {
+  kind: MediaKind;
+  image: ImageKey;
+  thumb?: ImageKey;
+  path: PathKey;
+  thumbPath?: PathKey;
+  dirty: DirtyKey;
+  column: "photo_path" | "label_path" | "back_path" | "render_path";
+  thumbColumn?: "thumb_path" | "render_thumb_path";
+}
+const MEDIA: readonly MediaSpec[] = [
+  { kind: "photo", image: "image", thumb: "thumb", path: "photoPath", thumbPath: "thumbPath", dirty: "photoDirty", column: "photo_path", thumbColumn: "thumb_path" },
+  { kind: "label", image: "labelImage", path: "labelPath", dirty: "labelDirty", column: "label_path" },
+  { kind: "back", image: "backImage", path: "backPath", dirty: "backDirty", column: "back_path" },
+  { kind: "render", image: "renderImage", thumb: "renderThumb", path: "renderPath", thumbPath: "renderThumbPath", dirty: "renderDirty", column: "render_path", thumbColumn: "render_thumb_path" }
+];
+type CachedMedia = Partial<Pick<ClosetItem, ImageKey>>;
+
 async function pullItems() {
   let page = overlapStart(meta.items);
   for (;;) {
-    let query = client().from("items").select("*").eq("user_id", userId()).order("synced_at").order("id").limit(PAGE_SIZE);
+    let query = client().from("items").select(ITEM_COLUMNS).eq("user_id", userId()).order("synced_at").order("id").limit(PAGE_SIZE);
     if (page) query = query.or(afterCursor(page));
     const { data, error } = await query;
     if (error) throw error;
@@ -261,7 +302,7 @@ async function applyRemoteItem(row: ItemRow) {
   const local = await getItem(row.id);
   if (local?.remoteSyncedAt === row.synced_at) return;
   // An unsent local edit that's newer wins; the push step sends it.
-  if (local && needsPush(local) && local.updatedAt > Date.parse(row.updated_at)) return;
+  if (local && !local.importOnly && needsPush(local) && local.updatedAt >= Date.parse(row.updated_at)) return;
   if (row.deleted_at) {
     if (local) {
       await removeItem(row.id);
@@ -269,18 +310,30 @@ async function applyRemoteItem(row: ItemRow) {
     }
     return;
   }
-  let image = local?.image;
-  let thumb = local?.thumb;
-  if (row.photo_path !== (local?.photoPath ?? null)) {
-    [image, thumb] = row.photo_path
-      ? await Promise.all([download(row.photo_path), download(row.thumb_path ?? row.photo_path)])
-      : [undefined, undefined];
-  }
-  await saveItem(fromRow(row, image, thumb));
+  const images: CachedMedia = {};
+  await Promise.all(MEDIA.map(async (spec) => {
+    images[spec.image] = await cachedDownload(row[spec.column], local?.[spec.path], local?.[spec.image]);
+    if (spec.thumb && spec.thumbPath && spec.thumbColumn) {
+      images[spec.thumb] = await cachedDownload(
+        row[spec.thumbColumn] ?? row[spec.column],
+        local?.[spec.thumbPath] ?? local?.[spec.path],
+        local?.[spec.thumb] ?? local?.[spec.image]
+      );
+    }
+  }));
+  // A long download must not overwrite an edit made while the request was in flight.
+  const latest = await getItem(row.id);
+  if (latest && !latest.importOnly && needsPush(latest) && latest.updatedAt >= Date.parse(row.updated_at)) return;
+  await saveItem(fromRow(row, images));
   dataChanged = true;
 }
 
-function fromRow(row: ItemRow, image?: string, thumb?: string): ClosetItem {
+async function cachedDownload(path: string | null, cachedPath?: string, cachedImage?: string) {
+  if (!path) return undefined;
+  return path === cachedPath && cachedImage ? cachedImage : download(path);
+}
+
+function fromRow(row: ItemRow, images: CachedMedia): ClosetItem {
   return {
     id: row.id,
     name: row.name,
@@ -297,19 +350,26 @@ function fromRow(row: ItemRow, image?: string, thumb?: string): ClosetItem {
     purchasedOn: row.purchased_on ?? undefined,
     store: row.store ?? undefined,
     care: row.care ?? undefined,
-    image,
-    thumb,
+    ...images,
+    ai: row.ai === null ? undefined : row.ai as unknown as ItemAI,
     photoPath: row.photo_path ?? undefined,
     thumbPath: row.thumb_path ?? undefined,
+    labelPath: row.label_path ?? undefined,
+    backPath: row.back_path ?? undefined,
+    renderPath: row.render_path ?? undefined,
+    renderThumbPath: row.render_thumb_path ?? undefined,
     createdAt: Date.parse(row.created_at),
     updatedAt: Date.parse(row.updated_at),
     dirty: false,
     photoDirty: false,
+    labelDirty: false,
+    backDirty: false,
+    renderDirty: false,
     remoteSyncedAt: row.synced_at
   };
 }
 
-function toRow(item: ClosetItem, photoPath: string | null, thumbPath: string | null): ItemInsert {
+function toRow(item: ClosetItem, paths: Partial<Pick<ClosetItem, PathKey>>): ItemInsert {
   const iso = (time: number) => new Date(time).toISOString();
   return {
     id: item.id,
@@ -328,68 +388,144 @@ function toRow(item: ClosetItem, photoPath: string | null, thumbPath: string | n
     purchased_on: item.purchasedOn ?? null,
     store: item.store ?? null,
     care: item.care ?? null,
-    photo_path: photoPath,
-    thumb_path: thumbPath,
+    photo_path: paths.photoPath ?? null,
+    thumb_path: paths.thumbPath ?? null,
+    label_path: paths.labelPath ?? null,
+    back_path: paths.backPath ?? null,
+    render_path: paths.renderPath ?? null,
+    render_thumb_path: paths.renderThumbPath ?? null,
+    ai: item.ai ? item.ai as unknown as Json : null,
     created_at: iso(item.createdAt),
     updated_at: iso(item.updatedAt),
     deleted_at: item.deletedAt ? iso(item.deletedAt) : null
   };
 }
 
+interface PreparedMedia {
+  spec: MediaSpec;
+  path?: string;
+  thumbPath?: string;
+  /** Re-encoded media, kept only if the user hasn't replaced this image meanwhile. */
+  recompressed?: { image: string; thumb: string };
+}
+
 interface Prepared {
   item: ClosetItem;
   row: ItemInsert;
-  photoPath?: string;
-  thumbPath?: string;
-  /** Re-encoded photo, when the stored one was too big or the wrong type to upload. */
-  recompressed?: { image: string; thumb: string };
-  /** Old photo versions to delete once the row no longer points at them. */
+  media: PreparedMedia[];
+  /** Old versions to delete only after the row no longer points at them. */
   stalePaths: string[];
+  /** Fresh files can be removed if insert-only conflict handling skips this import. */
+  uploadedPaths: string[];
 }
 
 async function preparePush(item: ClosetItem): Promise<Prepared> {
-  let photoPath = item.photoPath;
-  let thumbPath = item.thumbPath;
   const stalePaths: string[] = [];
-  let recompressed: Prepared["recompressed"];
-
-  if (item.deletedAt) {
-    stalePaths.push(...[photoPath, thumbPath].filter((path): path is string => Boolean(path)));
-    photoPath = undefined;
-    thumbPath = undefined;
-  } else if (item.image && (item.photoDirty !== false || !item.photoPath)) {
-    let full = dataUrlToBlob(item.image);
-    let small = dataUrlToBlob(item.thumb ?? item.image);
-    if (!UPLOADABLE.includes(full.type) || full.size > MAX_UPLOAD_BYTES) {
-      recompressed = await recompressDataUrl(item.image);
-      full = dataUrlToBlob(recompressed.image);
-      small = dataUrlToBlob(recompressed.thumb);
+  const uploadedPaths: string[] = [];
+  const media: PreparedMedia[] = [];
+  const paths: Partial<Pick<ClosetItem, PathKey>> = {};
+  try {
+    for (const spec of MEDIA) {
+      let path = item[spec.path];
+      let thumbPath = spec.thumbPath ? item[spec.thumbPath] : undefined;
+      let recompressed: PreparedMedia["recompressed"];
+      const image = item[spec.image];
+      if (item.deletedAt || (!image && item[spec.dirty] === true)) {
+        stalePaths.push(...[path, thumbPath].filter((value): value is string => Boolean(value)));
+        path = undefined;
+        thumbPath = undefined;
+      } else if (image && (item[spec.dirty] !== false || !path)) {
+        let full = dataUrlToBlob(image);
+        let small = spec.thumb ? dataUrlToBlob(item[spec.thumb] ?? image) : undefined;
+        // Always make the generated view's thumbnail with the shared 480px encoder.
+        if (spec.kind === "render" || !isUploadable(full) || (small && (!isUploadable(small) || !item[spec.thumb!]))) {
+          recompressed = await recompressDataUrl(image);
+          full = dataUrlToBlob(recompressed.image);
+          small = spec.thumb ? dataUrlToBlob(recompressed.thumb) : undefined;
+        }
+        if (!isUploadable(full) || (small && !isUploadable(small))) {
+          throw new Error("This photo is still too large to back up. Choose a smaller photo and try again.");
+        }
+        // A UUID avoids collisions between media versions uploaded by different devices.
+        const base = `${userId()}/${item.id}/${crypto.randomUUID()}`;
+        const suffix = spec.kind === "photo" ? "full" : spec.kind;
+        const nextPath = `${base}-${suffix}.${extension(full)}`;
+        await upload(nextPath, full);
+        uploadedPaths.push(nextPath);
+        let nextThumb: string | undefined;
+        if (small) {
+          nextThumb = `${base}-${spec.kind === "render" ? "render-thumb" : "thumb"}.${extension(small)}`;
+          await upload(nextThumb, small);
+          uploadedPaths.push(nextThumb);
+        }
+        stalePaths.push(...[path, thumbPath].filter((value): value is string => Boolean(value)));
+        path = nextPath;
+        thumbPath = nextThumb;
+      }
+      media.push({ spec, path, thumbPath, recompressed });
+      paths[spec.path] = path;
+      if (spec.thumbPath) paths[spec.thumbPath] = thumbPath;
     }
-    // A fresh path per photo version tells other devices the photo changed.
-    const base = `${userId()}/${item.id}/${Date.now().toString(36)}`;
-    const nextPhoto = `${base}-full.${extension(full)}`;
-    const nextThumb = `${base}-thumb.${extension(small)}`;
-    await upload(nextPhoto, full);
-    await upload(nextThumb, small);
-    stalePaths.push(...[photoPath, thumbPath].filter((path): path is string => Boolean(path)));
-    photoPath = nextPhoto;
-    thumbPath = nextThumb;
+  } catch (error) {
+    // No row has been sent yet, so these incomplete uploads are safe to remove.
+    await cleanUnusedUploads(uploadedPaths);
+    throw error;
   }
-  return { item, row: toRow(item, photoPath ?? null, thumbPath ?? null), photoPath, thumbPath, recompressed, stalePaths };
+  return { item, row: toRow(item, paths), media, stalePaths, uploadedPaths };
+}
+
+const isUploadable = (blob: Blob) => UPLOADABLE.includes(blob.type) && blob.size <= MAX_UPLOAD_BYTES;
+
+async function cleanUnusedUploads(paths: string[]) {
+  if (!paths.length) return;
+  try {
+    await client().storage.from(PHOTO_BUCKET).remove(paths);
+  } catch {
+    // Cleanup is best effort; preserve the original error and all local changes.
+  }
 }
 
 async function pushItems() {
   const pending = (await loadItems()).filter(needsPush);
   for (let start = 0; start < pending.length; start += PUSH_BATCH) {
     const prepared: Prepared[] = [];
-    for (const item of pending.slice(start, start + PUSH_BATCH)) prepared.push(await preparePush(item));
-    const { data, error } = await client().from("items").upsert(prepared.map((entry) => entry.row)).select("id, synced_at");
-    if (error) throw error;
-    const syncedAt = new Map(data.map((row) => [row.id, row.synced_at]));
-    for (const entry of prepared) await markPushed(entry, syncedAt.get(entry.item.id));
-    const stale = prepared.flatMap((entry) => entry.stalePaths);
-    // Best effort: a leftover file costs a little storage, never correctness.
-    if (stale.length) await client().storage.from(PHOTO_BUCKET).remove(stale);
+    try {
+      for (const item of pending.slice(start, start + PUSH_BATCH)) prepared.push(await preparePush(item));
+    } catch (error) {
+      // None of this batch's rows were sent, including the already-prepared entries.
+      await cleanUnusedUploads(prepared.flatMap((entry) => entry.uploadedPaths));
+      throw error;
+    }
+    // Insert-only imports cannot revive a tombstone or overwrite a piece imported elsewhere.
+    for (const importOnly of [false, true]) {
+      const group = prepared.filter((entry) => Boolean(entry.item.importOnly) === importOnly);
+      if (!group.length) continue;
+      const { data, error } = await client().from("items").upsert(group.map((entry) => entry.row), {
+        onConflict: "id", ignoreDuplicates: importOnly
+      }).select("id, synced_at");
+      // An error response can arrive after a commit. Keep fresh files in that case:
+      // deleting them blindly could break a row the server successfully saved.
+      if (error) throw error;
+      const syncedAt = new Map(data.map((row) => [row.id, row.synced_at]));
+      const sent = group.filter((entry) => syncedAt.has(entry.item.id));
+      for (const entry of sent) await markPushed(entry, syncedAt.get(entry.item.id));
+      const skipped = group.filter((entry) => !syncedAt.has(entry.item.id));
+      const stale = [...new Set([
+        ...sent.flatMap((entry) => entry.stalePaths),
+        ...skipped.flatMap((entry) => entry.uploadedPaths)
+      ])];
+      // Best effort: a leftover file costs a little storage, never correctness.
+      if (stale.length) await client().storage.from(PHOTO_BUCKET).remove(stale);
+      if (skipped.length) {
+        const { data: existing, error: readError } = await client().from("items").select(ITEM_COLUMNS)
+          .eq("user_id", userId()).in("id", skipped.map((entry) => entry.item.id));
+        if (readError) throw readError;
+        for (const row of existing) await applyRemoteItem(row);
+        if (existing.length !== skipped.length) {
+          throw new Error("An imported piece has an id already in use. Import a fresh package; your local changes are still saved.");
+        }
+      }
+    }
   }
 }
 
@@ -397,21 +533,37 @@ async function pushItems() {
 async function markPushed(entry: Prepared, remoteSyncedAt?: string) {
   const current = await getItem(entry.item.id);
   if (!current) return;
-  const unchanged = current.updatedAt === entry.item.updatedAt;
+  // Comparing the snapshot also catches distinct edits made in the same millisecond.
+  const unchanged = current.updatedAt === entry.item.updatedAt && JSON.stringify(current) === JSON.stringify(entry.item);
   if (entry.item.deletedAt) {
-    if (unchanged) await removeItem(current.id);
+    if (unchanged) {
+      await removeItem(current.id);
+      dataChanged = true;
+    } else if (current.importOnly) {
+      // The first insert succeeded: a concurrent Undo must now use normal upsert,
+      // rather than treating this just-created cloud tombstone as a duplicate.
+      await saveItem({ ...current, importOnly: undefined });
+      dataChanged = true;
+    }
     return;
   }
-  const samePhoto = current.image === entry.item.image;
-  await saveItem({
-    ...current,
-    ...(samePhoto && entry.recompressed ? entry.recompressed : {}),
-    photoPath: samePhoto ? entry.photoPath : current.photoPath,
-    thumbPath: samePhoto ? entry.thumbPath : current.thumbPath,
-    photoDirty: samePhoto ? false : current.photoDirty,
-    dirty: !unchanged,
-    remoteSyncedAt: unchanged ? remoteSyncedAt : current.remoteSyncedAt
-  });
+  const next = { ...current };
+  for (const { spec, path, thumbPath, recompressed } of entry.media) {
+    const sameMedia = current[spec.image] === entry.item[spec.image]
+      && (!spec.thumb || current[spec.thumb] === entry.item[spec.thumb]);
+    if (!sameMedia) continue;
+    if (recompressed) {
+      next[spec.image] = recompressed.image;
+      if (spec.thumb) next[spec.thumb] = recompressed.thumb;
+    }
+    next[spec.path] = path;
+    if (spec.thumbPath) next[spec.thumbPath] = thumbPath;
+    next[spec.dirty] = false;
+  }
+  next.dirty = !unchanged;
+  next.importOnly = undefined;
+  next.remoteSyncedAt = unchanged ? remoteSyncedAt : current.remoteSyncedAt;
+  await saveItem(next);
   dataChanged = true;
 }
 

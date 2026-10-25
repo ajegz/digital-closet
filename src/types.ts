@@ -9,6 +9,21 @@ export const OCCASIONS = ["Casual", "Work", "Formal", "Sport", "Lounge"] as cons
 export type Weather = (typeof WEATHER)[number];
 export type Occasion = (typeof OCCASIONS)[number];
 
+/** Provenance for an extra image, never a replacement for the real photo. */
+export interface RenderMetadata {
+  provider: string;
+  model: string;
+  createdAt: string;
+  /** SHA-256 of the original file supplied with the import. */
+  sourcePhotoSha256: string;
+  prompt?: string;
+  referenceUrl?: string;
+}
+
+export interface ItemAI {
+  render?: RenderMetadata;
+}
+
 export interface ClosetItem {
   id: string;
   name: string;
@@ -21,6 +36,13 @@ export interface ClosetItem {
   image?: string;
   /** Grid-size photo (data URL, max 480px). Older items may only have `image`. */
   thumb?: string;
+  /** Optional real reference photos, stored separately from the front photo. */
+  labelImage?: string;
+  backImage?: string;
+  /** Additional generated view; every display must identify it as AI-generated. */
+  renderImage?: string;
+  renderThumb?: string;
+  ai?: ItemAI;
   favorite: boolean;
   createdAt: number;
   updatedAt: number;
@@ -38,11 +60,21 @@ export interface ClosetItem {
   // Sync bookkeeping (Phase 3). Pieces saved before sync existed have none of these, which counts as "needs sending".
   /** False once the cloud has this exact version. */
   dirty?: boolean;
+  /** A chat import's first push may insert, but must never overwrite an existing cloud id. */
+  importOnly?: boolean;
   /** True when the photo changed on this device and hasn't been uploaded. */
   photoDirty?: boolean;
   /** Storage paths of the uploaded photo; a new photo gets new paths so other devices notice. */
   photoPath?: string;
   thumbPath?: string;
+  labelPath?: string;
+  backPath?: string;
+  renderPath?: string;
+  renderThumbPath?: string;
+  /** True also represents an explicit removal when the corresponding image is absent. */
+  labelDirty?: boolean;
+  backDirty?: boolean;
+  renderDirty?: boolean;
   /** Set when deleted while signed in; kept until the deletion reaches the cloud. */
   deletedAt?: number;
   /** The cloud's synced_at for the version this device has, to skip re-applying it. */
