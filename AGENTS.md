@@ -133,6 +133,7 @@ The source of truth is [.claude/skills/duolingo-style/SKILL.md](.claude/skills/d
 
 ## Working agreements with the owner
 
+- Photo intake is `0INPUT/`. The agent manages grouping, analysis and organization under `1PROCESSING/`, `2PROCESSED/` and `3NEEDS-INFO/`; follow [docs/photo-intake.md](docs/photo-intake.md). Keep these private photo folders out of Git. Preserve original files, and only mark a garment processed after its generated image is checked and its website sync is verified.
 - Ask before anything that costs money, creates paid resources, or sends data to a new third-party service; state the cost first.
 - Secrets never go in chat, the repo, or the client. Server-side keys live in Supabase Edge Function secrets.
 - Verify in the browser (phone width and desktop, light and dark) and with typecheck/build before calling something done; test with clearly labelled throwaway data and delete it afterwards.
