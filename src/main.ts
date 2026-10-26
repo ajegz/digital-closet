@@ -4,7 +4,7 @@ import { processPhoto } from "./photos";
 import { initAccount } from "./account";
 import { initDevice } from "./device";
 import { initChatImport } from "./import-ui";
-import { brandKey, CLOTHING_TYPES, clothingTypes, clothingTypeTone } from "./item-filters";
+import { brandKey, CLOTHING_TYPES, clothingType, clothingTypeTone } from "./item-filters";
 import { loadItems, loadMeta, loadRecords, removeItem, removeRecord, saveItem, saveMeta, saveRecord } from "./storage";
 import { isSignedIn, requestSync, startSync } from "./sync";
 import { OCCASIONS, UNKNOWN, WEATHER, type ClosetItem, type Collection, type Garment, type Occasion, type Outfit, type Status, type WearLog, type Weather } from "./types";
@@ -328,7 +328,7 @@ function visibleItems() {
       const matchesText = [item.name, item.category, item.brand, item.color, item.material, item.store].join(" ").toLowerCase().includes(query);
       const matchesCategory = activeCategory === "all" || item.category === activeCategory;
       const matchesStatus = activeStatus === "all" || item.status === activeStatus;
-      const matchesType = activeClothingType === "all" || clothingTypes(item.name).some((type) => type === activeClothingType);
+      const matchesType = activeClothingType === "all" || clothingType(item.name) === activeClothingType;
       const matchesBrand = activeBrand === "all" || itemBrandKey(item) === activeBrand;
       return matchesText && matchesCategory && matchesStatus && matchesType && matchesBrand;
     })
@@ -345,13 +345,14 @@ function cardHtml(item: ClosetItem) {
     ? `<span class="tag">Sample</span>`
     : `<button class="heart-button${item.favorite ? " is-on" : ""}" data-favorite type="button" aria-pressed="${item.favorite}" aria-label="Favorite ${escapeHtml(item.name)}">${item.favorite ? icons.heartFilled : icons.heart}</button>`;
   const meta = [item.brand, item.color].filter(known).join(" · ") || item.category;
-  const typeLabels = clothingTypes(item.name).map((type) => `<span class="item-type" data-type-tone="${clothingTypeTone(type)}">${escapeHtml(type)}</span>`).join("");
+  const type = clothingType(item.name);
+  const typeLabel = `<span class="item-type" data-type-tone="${clothingTypeTone(type)}">${escapeHtml(type)}</span>`;
   const label = item.sample ? "Sample piece. Add your own" : `Open ${item.name}`;
   return `
     <article class="item-card${item.sample ? " is-sample" : ""}" data-id="${escapeHtml(item.id)}">
       <div class="item-visual">${visual}</div>
       ${heart}
-      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p><div class="item-types">${typeLabels}</div>${statusPill(item)}</div>
+      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p><div class="item-types">${typeLabel}</div>${statusPill(item)}</div>
     </article>`;
 }
 
