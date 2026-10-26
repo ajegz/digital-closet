@@ -1,5 +1,7 @@
 # AI phase plan (Phase 6)
 
+**Before every project session and garment generation/regeneration, read [Garment image standard](garment-image-standard.md).** It governs web-reference search, original-only fallback and conditional retail styling throughout this project.
+
 Status: **planned, not started** (2026-10-25). Read [AGENTS.md](../AGENTS.md) first for the architecture, rules and owner preferences.
 
 ## What the owner wants

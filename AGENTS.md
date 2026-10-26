@@ -2,6 +2,8 @@
 
 Read this first. It describes what exists, how it fits together, the rules this codebase follows, and what the owner expects. The next phase (AI) is planned in [docs/ai-phase-plan.md](docs/ai-phase-plan.md).
 
+**At the start of every chat/session in this project, and before generating or regenerating a garment image, read [Garment image standard](docs/garment-image-standard.md).** This applies throughout this folder, including all intake, processing and archive subfolders. Search the web first; use a matching, inspected product image as a generation reference when available. Otherwise use only the owner's original garment photos. The linked standard defines the conditional buttoned, clean, crease-minimized retail presentation and required evidence.
+
 - **Owner:** MJ (GitHub `ajegz`). Single user today; sign-ups are disabled.
 - **Live:** https://ajegz.github.io/digital-closet/ (GitHub Pages, deploys on every push to `main`).
 - **Repo:** https://github.com/ajegz/digital-closet (public; never commit secrets or personal email addresses).

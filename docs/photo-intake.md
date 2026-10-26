@@ -1,5 +1,7 @@
 # Local photo intake
 
+**Session-start and pre-generation requirement:** read [Garment image standard](garment-image-standard.md). Search the web first, use a matching inspected product image alongside originals when available, and otherwise use only originals. Apply the conditional buttoned, clean, crease-minimized retail styling described there, including when correcting an already processed garment.
+
 The owner drops garment photos into `0INPUT/` and tells the agent to process the folder. Front and label photos, plus optional back/detail photos, may be mixed in a batch. The agent groups photos by garment, checks the grouping, and asks only when a photo cannot be matched confidently. The owner does not need to rename files, make folders, prepare import JSON, or run commands.
 
 For MJ, “check the new batch in input” is also a request to complete this workflow through verified private website sync. Do not stop after inventory or label reading unless MJ explicitly asks for inspection only. Missing optional details such as brand, material or a conflicting size stay unknown and Needs review; they do not block an otherwise confidently grouped garment. Apply the existing provider, cost and photo-sharing permissions. This chat command does not create a continuous folder watcher.
