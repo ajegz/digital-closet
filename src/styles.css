@@ -33,6 +33,8 @@
   --review-text: #8a4f00;
   --grape-tint: #f3e3ff;
   --grape-text: #7a3fa8;
+  --teal-text: #006b65;
+  --teal-tint: #d7f3ee;
   --garment-ink: #3c3c3c;
   --garment-ink-2: #2a2a2a;
   --disabled-ledge: #d0d0d0;
@@ -72,6 +74,8 @@
   --review-text: #ffcf66;
   --grape-tint: #33204a;
   --grape-text: #dcb0ff;
+  --teal-text: #85ddd1;
+  --teal-tint: #143c37;
   --garment-ink: #c9d4da;
   --garment-ink-2: #aab6bc;
   --disabled-ledge: #2a3840;
@@ -230,7 +234,18 @@ button.task:active { transform: translateY(1px); }
 .item-meta { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-pill { justify-self: start; padding: 2px 8px; border-radius: 8px; background: var(--sun-tint); color: var(--review-text); font-size: 12px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
 .status-pill.is-ok { background: var(--leaf-tint); color: var(--leaf-text); }
-.item-type { justify-self: start; padding: 3px 8px; border-radius: 8px; background: var(--sky-tint); color: var(--sky-text); font-size: 14px; font-weight: 800; }
+[data-type-tone] { --type-fill: var(--surface); --type-text: var(--ink); }
+[data-type-tone="leaf"] { --type-fill: var(--leaf-tint); --type-text: var(--leaf-text); }
+[data-type-tone="grape"] { --type-fill: var(--grape-tint); --type-text: var(--grape-text); }
+[data-type-tone="berry"] { --type-fill: var(--berry-tint); --type-text: var(--berry-text); }
+[data-type-tone="sky"] { --type-fill: var(--sky-tint); --type-text: var(--sky-text); }
+[data-type-tone="warm"] { --type-fill: var(--well-2); --type-text: var(--review-text); }
+[data-type-tone="teal"] { --type-fill: var(--teal-tint); --type-text: var(--teal-text); }
+[data-type-tone="sun"] { --type-fill: var(--sun-tint); --type-text: var(--review-text); }
+.item-types { display: flex; flex-wrap: wrap; gap: 4px; }
+.item-type { padding: 3px 8px; border-radius: 8px; background: var(--type-fill); color: var(--type-text); font-size: 14px; font-weight: 800; }
+#clothingTypeFilter { background: var(--type-fill); color: var(--type-text); }
+#clothingTypeFilter option { background: var(--surface); color: var(--ink); }
 .review-hint { color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 .item-grid.is-list { grid-template-columns: 1fr; gap: 10px; }

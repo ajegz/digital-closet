@@ -9,6 +9,17 @@ export const CLOTHING_TYPES = [
 ] as const;
 export type ClothingType = typeof CLOTHING_TYPES[number];
 
+const TYPE_TONES: Record<ClothingType, string> = {
+  "Shirt": "leaf", "Polo shirt": "grape", "T-shirt": "berry",
+  "Long sleeves": "sky", "Short sleeves": "berry", "Hoodie": "warm",
+  "Sweatshirt": "grape", "Sweater": "leaf", "Cardigan": "warm",
+  "Half zip": "teal", "Quarter zip": "sun", "Jacket": "teal",
+  "Coat": "grape", "Vest": "sky", "Jeans": "sky", "Trousers": "leaf",
+  "Shorts": "warm", "Dress": "berry", "Skirt": "grape", "Other": "neutral",
+};
+
+export const clothingTypeTone = (type: string) => TYPE_TONES[type as ClothingType] ?? "neutral";
+
 export function clothingTypes(name: string): ClothingType[] {
   const text = normalize(name);
   const types: ClothingType[] = [];
@@ -16,10 +27,12 @@ export function clothingTypes(name: string): ClothingType[] {
   const tee = /\b(t ?shirt|tee)\b/.test(text);
   const polo = /\bpolo\b/.test(text);
   const hoodie = /\bhoodie\b|\bhooded sweatshirt\b/.test(text);
+  const longSleeves = /\blong sleeves?\b/.test(text);
   add("Shirt", !tee && !polo && /\b(shirt|overshirt)\b/.test(text));
   add("Polo shirt", polo);
-  add("T-shirt", tee);
-  add("Long sleeves", /\blong sleeves?\b/.test(text));
+  // The owner's browsing taxonomy treats long-sleeve tees as Long sleeves.
+  add("T-shirt", tee && !longSleeves);
+  add("Long sleeves", longSleeves);
   add("Short sleeves", /\bshort sleeves?\b/.test(text));
   add("Hoodie", hoodie);
   add("Sweatshirt", /\bsweatshirt\b/.test(text));

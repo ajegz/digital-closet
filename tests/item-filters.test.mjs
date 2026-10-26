@@ -7,7 +7,13 @@ test("shirt shapes stay distinct while sleeve filters overlap", () => {
   assert.deepEqual(clothingTypes("TEST short-sleeve T-shirt"), ["T-shirt", "Short sleeves"]);
   assert.deepEqual(clothingTypes("TEST utility overshirt"), ["Shirt"]);
   assert.deepEqual(clothingTypes("TEST dress shirt"), ["Shirt"]);
-  assert.deepEqual(clothingTypes("TEST long sleeve tee"), ["T-shirt", "Long sleeves"]);
+  assert.deepEqual(clothingTypes("TEST long sleeve tee"), ["Long sleeves"]);
+  for (const name of [
+    "Washed-charcoal chest-pocket long-sleeve T-shirt",
+    "Cotton On T-Bar cream Peace & Quiet long-sleeve T-shirt",
+    "H&M white Rick and Morty long-sleeve T-shirt",
+    "Zara navy plain long-sleeve T-shirt",
+  ]) assert.deepEqual(clothingTypes(name), ["Long sleeves"]);
 });
 
 test("half and quarter zip require evidence, not just a zipper", () => {
