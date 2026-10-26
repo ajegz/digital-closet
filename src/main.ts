@@ -345,12 +345,13 @@ function cardHtml(item: ClosetItem) {
     ? `<span class="tag">Sample</span>`
     : `<button class="heart-button${item.favorite ? " is-on" : ""}" data-favorite type="button" aria-pressed="${item.favorite}" aria-label="Favorite ${escapeHtml(item.name)}">${item.favorite ? icons.heartFilled : icons.heart}</button>`;
   const meta = [item.brand, item.color].filter(known).join(" · ") || item.category;
+  const typeLabel = clothingTypes(item.name).join(" · ");
   const label = item.sample ? "Sample piece. Add your own" : `Open ${item.name}`;
   return `
     <article class="item-card${item.sample ? " is-sample" : ""}" data-id="${escapeHtml(item.id)}">
       <div class="item-visual">${visual}</div>
       ${heart}
-      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p>${studio ? `<span class="ai-image-label">AI-generated</span>` : ""}${statusPill(item)}</div>
+      <div class="item-body"><h3><button class="item-link" type="button" aria-label="${escapeHtml(label)}">${escapeHtml(item.name)}</button></h3><p class="item-meta">${escapeHtml(meta)}</p><span class="item-type">${escapeHtml(typeLabel)}</span>${statusPill(item)}</div>
     </article>`;
 }
 
@@ -474,6 +475,7 @@ function renderDetail(item: ClosetItem) {
   $("#detailCollection").textContent = item.category;
   $("#detailName").textContent = item.name;
   $("#detailTags").innerHTML = statusPill(item);
+  $("#detailReviewHint").hidden = item.status === "Confirmed";
 
   const favorite = $("#detailFavorite");
   favorite.innerHTML = item.favorite ? icons.heartFilled : icons.heart;

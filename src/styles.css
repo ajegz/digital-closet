@@ -230,6 +230,8 @@ button.task:active { transform: translateY(1px); }
 .item-meta { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-pill { justify-self: start; padding: 2px 8px; border-radius: 8px; background: var(--sun-tint); color: var(--review-text); font-size: 12px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
 .status-pill.is-ok { background: var(--leaf-tint); color: var(--leaf-text); }
+.item-type { justify-self: start; padding: 3px 8px; border-radius: 8px; background: var(--sky-tint); color: var(--sky-text); font-size: 14px; font-weight: 800; }
+.review-hint { color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 .item-grid.is-list { grid-template-columns: 1fr; gap: 10px; }
 .is-list .item-card { flex-direction: row; align-items: center; }

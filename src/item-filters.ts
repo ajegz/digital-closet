@@ -15,14 +15,15 @@ export function clothingTypes(name: string): ClothingType[] {
   const add = (type: ClothingType, matches: boolean) => { if (matches) types.push(type); };
   const tee = /\b(t ?shirt|tee)\b/.test(text);
   const polo = /\bpolo\b/.test(text);
+  const hoodie = /\bhoodie\b|\bhooded sweatshirt\b/.test(text);
   add("Shirt", !tee && !polo && /\b(shirt|overshirt)\b/.test(text));
   add("Polo shirt", polo);
   add("T-shirt", tee);
   add("Long sleeves", /\blong sleeves?\b/.test(text));
   add("Short sleeves", /\bshort sleeves?\b/.test(text));
-  add("Hoodie", /\bhoodie\b|\bhooded sweatshirt\b/.test(text));
+  add("Hoodie", hoodie);
   add("Sweatshirt", /\bsweatshirt\b/.test(text));
-  add("Sweater", /\b(sweater|jumper|pullover)\b/.test(text));
+  add("Sweater", /\b(sweater|jumper)\b/.test(text) || (!hoodie && !/\bsweatshirt\b/.test(text) && /\bpullover\b/.test(text)));
   add("Cardigan", /\bcardigan\b/.test(text));
   add("Half zip", /\bhalf zip\b|\b1\s*\/\s*2 zip\b/.test(text));
   add("Quarter zip", /\bquarter zip\b|\b1\s*\/\s*4 zip\b/.test(text));

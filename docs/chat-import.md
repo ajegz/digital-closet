@@ -2,7 +2,7 @@
 
 For the owner’s folder-based intake, grouping and archive process, see [Local photo intake](photo-intake.md).
 
-Send one garment per set: front, label close-up, and optional back. Chat can prepare a studio render, check it against the source, and package the piece for the app. Your real front photo remains the original record. Catalogue cards and the piece's detail view show the studio image by default, labelled **AI-generated**. Use the detail view's **Original**, **Label** and **Back** controls to inspect the source photos. Outfit collages, wear logs and other small thumbnails keep showing the original. All imported pieces start **Needs review**.
+Send one garment per set: front, label close-up, and optional back. Chat can prepare a studio render, check it against the source, and package the piece for the app. Your real front photo remains the original record. Catalogue cards show the studio image by default with clothing-type labels. The detail view identifies the studio image using its **AI-generated** photo control and caption; use **Original**, **Label** and **Back** to inspect source photos. Outfit collages, wear logs and other small thumbnails keep showing the original. All imported pieces start **Needs review**. Open a piece, compare its image with the original and check its saved details, then choose **Edit → Confirmed → Save changes** when satisfied.
 
 ## Catalogue image workflow
 

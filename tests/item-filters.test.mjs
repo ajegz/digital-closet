@@ -14,6 +14,7 @@ test("half and quarter zip require evidence, not just a zipper", () => {
   assert.deepEqual(clothingTypes("TEST Half–zip sweatshirt"), ["Sweatshirt", "Half zip"]);
   assert.deepEqual(clothingTypes("TEST 1/4 zip sweater"), ["Sweater", "Quarter zip"]);
   assert.deepEqual(clothingTypes("TEST full-zip hoodie"), ["Hoodie"]);
+  assert.deepEqual(clothingTypes("TEST oversized pullover hoodie"), ["Hoodie"]);
   assert.deepEqual(clothingTypes("TEST hooded windbreaker jacket"), ["Jacket"]);
 });
 
